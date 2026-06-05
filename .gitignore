@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.claude
+
+# CUDA standalone build artifacts
+cuda/seam_carve
+cuda/*.o
+cuda/*.ncu-rep
+carved.png
