@@ -19,7 +19,7 @@ NVCCFLAGS := -O3 -std=c++14 -arch=$(ARCH) -lineinfo
 COOPFLAGS := $(NVCCFLAGS) -rdc=true
 HOSTFLAGS := -O3 -std=c++14
 
-TARGETS := seam_carve seam_carve_v3
+TARGETS := seam_carve seam_carve_v3 seam_carve_v4
 
 all: $(TARGETS)
 
@@ -29,6 +29,13 @@ seam_carve.o: seam_carve.cu third_party/stb_image.h third_party/stb_image_write.
 
 seam_carve: seam_carve.o stb_impl.o
 	$(NVCC) $(NVCCFLAGS) seam_carve.o stb_impl.o -o seam_carve
+
+# --- v4: single-block DP with software-pipelined energy prefetch ---
+seam_carve_v4.o: seam_carve_v4.cu third_party/stb_image.h third_party/stb_image_write.h
+	$(NVCC) $(NVCCFLAGS) -c seam_carve_v4.cu -o seam_carve_v4.o
+
+seam_carve_v4: seam_carve_v4.o stb_impl.o
+	$(NVCC) $(NVCCFLAGS) seam_carve_v4.o stb_impl.o -o seam_carve_v4
 
 # --- v3: cooperative multi-SM DP ---
 seam_carve_v3.o: seam_carve_v3.cu third_party/stb_image.h third_party/stb_image_write.h
@@ -42,6 +49,6 @@ stb_impl.o: stb_impl.cpp third_party/stb_image.h third_party/stb_image_write.h
 	$(NVCC) $(HOSTFLAGS) -c stb_impl.cpp -o stb_impl.o
 
 clean:
-	rm -f $(TARGETS) seam_carve.o seam_carve_v3.o stb_impl.o
+	rm -f $(TARGETS) seam_carve.o seam_carve_v3.o seam_carve_v4.o stb_impl.o
 
 .PHONY: all clean
