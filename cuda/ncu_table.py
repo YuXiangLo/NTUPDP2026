@@ -58,6 +58,17 @@ def main():
 
     fmt = "%-22s%10s%8s%8s%8s"
     print(fmt % tuple(label for _, label in COLS))
+
+    # Stall-reason columns: how many active cycles each warp wastes waiting,
+    # per the reason. The largest one is the real bottleneck.
+    stall_cols = [
+        (c, c.split("stalled_")[1].split("_per_issue")[0])
+        for c in header
+        if c.startswith("smsp__average_warps_issue_stalled_")
+        and c.endswith("_per_issue_active.ratio")
+    ]
+
+    rows_by_kernel = []
     seen = set()
     for r in rows[2:]:  # rows[1] is the units row
         if len(r) <= max(idx.values()):
@@ -66,7 +77,21 @@ def main():
         if not kernel or kernel in seen:
             continue
         seen.add(kernel)
-        print(fmt % tuple(r[idx[name]] for name, _ in COLS))
+        rows_by_kernel.append((kernel, r))
+        print(fmt % ((kernel,) + tuple(r[idx[name]] for name, _ in COLS[1:])))
+
+    if stall_cols:
+        print("\ntop warp-stall reasons (cycles/active, higher = bigger bottleneck):")
+        for kernel, r in rows_by_kernel:
+            vals = []
+            for col, name in stall_cols:
+                try:
+                    vals.append((float(r[header.index(col)]), name))
+                except (ValueError, IndexError):
+                    pass
+            vals.sort(reverse=True)
+            top = "  ".join("%s=%.2f" % (n, v) for v, n in vals[:4])
+            print("  %-22s %s" % (kernel, top))
 
 
 if __name__ == "__main__":
