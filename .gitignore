@@ -225,6 +225,7 @@ __marimo__/
 cuda/seam_carve
 cuda/seam_carve_v3
 cuda/seam_carve_v4
+cuda/seam_carve_v5
 cuda/*.o
 cuda/*.ncu-rep
 carved.png
