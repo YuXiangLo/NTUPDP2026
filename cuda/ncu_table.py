@@ -33,12 +33,14 @@ def load_rows(path):
     # Otherwise treat it as an ncu report and shell out to convert it.
     cmd = ["ncu", "--import", path, "--csv", "--page", "raw"]
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        # stdout/stderr=PIPE instead of capture_output (Py3.7+) for old python3.6.
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              universal_newlines=True)
     except FileNotFoundError:
         sys.exit("error: `ncu` not found in PATH (run `module load cuda` first).")
-    except subprocess.CalledProcessError as e:
-        sys.exit("error: ncu import failed:\n" + (e.stderr or ""))
-    return list(csv.reader(io.StringIO(out)))
+    if proc.returncode != 0:
+        sys.exit("error: ncu import failed:\n" + (proc.stderr or ""))
+    return list(csv.reader(io.StringIO(proc.stdout)))
 
 
 def main():
