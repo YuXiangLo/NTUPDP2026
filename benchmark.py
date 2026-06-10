@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import statistics
+import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -9,9 +13,98 @@ from typing import Callable, Optional
 import numpy as np
 import torch
 
-import cuda_versions  # noqa: F401
 from seam_carving import carve_seams_cpu, carve_seams_torch, load_image, save_image
-from seam_carving.cuda_registry import available_cuda_versions, get_cuda_implementation
+
+ROOT_DIR = Path(__file__).resolve().parent
+DEFAULT_CUDA_BINARY = ROOT_DIR / "build" / "cuda"
+
+
+def _resolve_nvcc() -> str:
+    nvcc = shutil.which("nvcc")
+    if nvcc is not None:
+        return nvcc
+
+    cuda_home = os.environ.get("CUDA_HOME")
+    if cuda_home:
+        candidate = Path(cuda_home) / "bin" / "nvcc"
+        if candidate.exists():
+            return str(candidate)
+
+    raise FileNotFoundError("nvcc not found on PATH and CUDA_HOME/bin/nvcc is unavailable")
+
+
+def _ensure_cuda_binary(binary_path: Path, source_path: Optional[Path]) -> Path:
+    if binary_path.exists() and (source_path is None or binary_path.stat().st_mtime >= source_path.stat().st_mtime):
+        return binary_path
+
+    if source_path is None:
+        raise FileNotFoundError("CUDA source is required when the binary is missing or out of date")
+    if not source_path.exists():
+        raise FileNotFoundError(f"Missing CUDA source: {source_path}")
+
+    binary_path.parent.mkdir(parents=True, exist_ok=True)
+    nvcc = _resolve_nvcc()
+    subprocess.run(
+        [nvcc, "-O2", "-std=c++17", str(source_path), "-o", str(binary_path)],
+        check=True,
+    )
+    return binary_path
+
+
+def _write_raw_image(path: Path, image: np.ndarray) -> None:
+    image = np.asarray(image, dtype=np.float32, order="C")
+    if image.ndim == 2:
+        height, width = image.shape
+        channels = 1
+    elif image.ndim == 3:
+        height, width, channels = image.shape
+    else:
+        raise ValueError("image must be 2D (H, W) or 3D (H, W, C)")
+
+    header = np.array([height, width, channels], dtype=np.int32)
+    with path.open("wb") as handle:
+        header.tofile(handle)
+        image.reshape(-1).tofile(handle)
+
+
+def _read_raw_image(path: Path) -> np.ndarray:
+    with path.open("rb") as handle:
+        header = np.fromfile(handle, dtype=np.int32, count=3)
+        if header.size != 3:
+            raise ValueError(f"Invalid CUDA output header in {path}")
+        height, width, channels = (int(v) for v in header)
+        data = np.fromfile(handle, dtype=np.float32)
+
+    expected = height * width * channels
+    if data.size != expected:
+        raise ValueError(f"Expected {expected} floats in {path}, found {data.size}")
+
+    if channels == 1:
+        return data.reshape(height, width)
+    return data.reshape(height, width, channels)
+
+
+def _run_cuda(binary_path: Path, image: np.ndarray, num_seams: int, show_progress: bool) -> np.ndarray:
+    with tempfile.TemporaryDirectory(prefix="cuda_") as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        input_path = tmpdir_path / "input.bin"
+        output_path = tmpdir_path / "output.bin"
+        _write_raw_image(input_path, image)
+
+        command = [
+            str(binary_path),
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--seams",
+            str(num_seams),
+        ]
+        if show_progress:
+            command.append("--progress")
+
+        subprocess.run(command, check=True)
+        return _read_raw_image(output_path)
 
 
 def _measure(
@@ -31,7 +124,6 @@ def _measure(
                 sync()
 
     times = []
-    # Use tqdm for runs if show_progress is enabled
     for _ in tqdm(range(runs), desc=f"{label:<12} (runs)", disable=not show_progress):
         start = time.perf_counter()
         runner()
@@ -46,7 +138,6 @@ def _measure(
 
 
 def main() -> None:
-    print("Starting main...")
     parser = argparse.ArgumentParser(description="Benchmark seam carving variants.")
     parser.add_argument("--image", required=True, help="Path to input image.")
     parser.add_argument("--seams", type=int, default=10, help="Number of seams to remove.")
@@ -59,9 +150,15 @@ def main() -> None:
         help="Device for the PyTorch baseline.",
     )
     parser.add_argument(
-        "--cuda-version",
-        default=None,
-        help=f"CUDA implementation name ({', '.join(available_cuda_versions())}). If not specified, all versions are benchmarked.",
+        "--cuda-binary",
+        type=Path,
+        default=DEFAULT_CUDA_BINARY,
+        help="Path to the compiled CUDA executable.",
+    )
+    parser.add_argument(
+        "--cuda-source",
+        type=Path,
+        help="Path to the CUDA source file used when compiling the executable.",
     )
     parser.add_argument(
         "--save-output",
@@ -93,10 +190,11 @@ def main() -> None:
     print("")
 
     cpu_output: Optional[np.ndarray] = None
-    torch_output: Optional[torch.Tensor] = None
-    cuda_output: Optional[torch.Tensor] = None
+    torch_output: Optional[np.ndarray] = None
+    cuda_output: Optional[np.ndarray] = None
 
     if not args.skip_cpu:
+
         def cpu_runner() -> np.ndarray:
             nonlocal cpu_output
             cpu_output = carve_seams_cpu(image_np.copy(), args.seams, show_progress=args.progress)
@@ -112,55 +210,33 @@ def main() -> None:
 
     image_torch = torch.from_numpy(image_np)
 
-    def torch_runner() -> torch.Tensor:
+    def torch_runner() -> np.ndarray:
         nonlocal torch_output
         torch_output = carve_seams_torch(
             image_torch.clone(), args.seams, device=device, show_progress=args.progress
-        )
+        ).detach().cpu().numpy()
         return torch_output
 
     torch_sync = torch.cuda.synchronize if device.type == "cuda" else None
     _measure("PyTorch", torch_runner, args.runs, args.warmup, sync=torch_sync, show_progress=args.progress)
 
-    if not torch.cuda.is_available():
-        print("CUDA        skipped (torch.cuda unavailable)")
-    else:
-        versions_to_run = [args.cuda_version] if args.cuda_version else available_cuda_versions()
-        image_cuda = image_torch.to(device="cuda")
+    binary_path = _ensure_cuda_binary(args.cuda_binary, args.cuda_source)
 
-        for version in versions_to_run:
-            cuda_impl = get_cuda_implementation(version)
-            if cuda_impl is None:
-                print(f"CUDA ({version:<7}) skipped (not registered)")
-                continue
+    def cuda_runner() -> np.ndarray:
+        nonlocal cuda_output
+        cuda_output = _run_cuda(binary_path, image_np, args.seams, args.progress)
+        return cuda_output
 
-            def cuda_runner_factory(impl):
-                def cuda_runner() -> torch.Tensor:
-                    nonlocal cuda_output
-                    cuda_output = impl.carve(image_cuda.clone(), args.seams, show_progress=args.progress)
-                    return cuda_output
-                return cuda_runner
-
-            try:
-                _measure(
-                    f"CUDA ({version})",
-                    cuda_runner_factory(cuda_impl),
-                    args.runs,
-                    args.warmup,
-                    sync=torch.cuda.synchronize,
-                    show_progress=args.progress,
-                )
-            except NotImplementedError as exc:
-                print(f"CUDA ({version:<7}) skipped ({exc})")
+    _measure("CUDA", cuda_runner, args.runs, args.warmup, show_progress=args.progress)
 
     if args.save_output:
         output_dir.mkdir(parents=True, exist_ok=True)
         if cpu_output is not None:
             save_image(output_dir / "cpu.png", cpu_output)
         if torch_output is not None:
-            save_image(output_dir / "pytorch.png", torch_output.detach().cpu().numpy())
+            save_image(output_dir / "pytorch.png", torch_output)
         if cuda_output is not None:
-            save_image(output_dir / "cuda.png", cuda_output.detach().cpu().numpy())
+            save_image(output_dir / "cuda.png", cuda_output)
         print(f"Outputs saved to {output_dir}")
 
 
