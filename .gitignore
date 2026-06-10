@@ -223,6 +223,7 @@ __marimo__/
 
 # CUDA standalone build artifacts
 cuda/seam_carve
+cuda/seam_carve_v0
 cuda/seam_carve_v3
 cuda/seam_carve_v4
 cuda/seam_carve_v5

@@ -131,6 +131,21 @@ srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 20 \
 python3 bench_table.py results.csv
 ```
 
+### 對照 naive baseline(v0)
+
+上面 v2→v6 的加速是「已經融成一顆 kernel 之後」的增量。真正的起點是 **v0
+(`seam_carve_v0.cu`)**:DP 改成**每列發一顆 kernel**(每 seam H 次 launch、整張 cost
+matrix 在 global memory 來回、零重用),對應原始 PyTorch `CUDA_v0` 的逐列 launch 寫法
+(server 的 python 是 3.6,跑不動原本的 `benchmark.py`,故用同工具鏈的純 CUDA naive 版當對照,
+隔離的正是「fusion」這個優化)。`cuda/baseline_compare.sh` 在固定 10 seams 下比 v0/v2/v5/v6:
+
+```bash
+srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 30 \
+    bash baseline_compare.sh ../Broadway_tower_edit.jpg ../input1.jpg ../input.jpg
+```
+
+> v0→v6 的 headline 加速比待數據填入(預期數十倍,naive 被 launch overhead 綁死)。
+
 ### 結果(V100,best-of-3,單位 ms/seam = 整條 pipeline)
 
 **Broadway_tower_edit.jpg(1428×968)**
