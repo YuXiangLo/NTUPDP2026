@@ -24,7 +24,7 @@ set -u
 
 PCTS="${PCTS:-5 10 20}"
 RUNS="${RUNS:-3}"
-BINS="${BINS:-seam_carve seam_carve_v4 seam_carve_v5}"
+BINS="${BINS:-seam_carve seam_carve_v5 seam_carve_v6}"
 OUT="${OUT:-results.csv}"
 BINDIR="${BINDIR:-.}"
 TMP="${TMPDIR:-/tmp}/seam_bench_out.png"
@@ -42,6 +42,7 @@ ver_label() {
         seam_carve)    echo "v2" ;;
         seam_carve_v4) echo "v4" ;;
         seam_carve_v5) echo "v5" ;;
+        seam_carve_v6) echo "v6" ;;
         *)             echo "$1" ;;
     esac
 }

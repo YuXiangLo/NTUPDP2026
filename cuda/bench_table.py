@@ -26,7 +26,7 @@ def main():
         return 1
 
     # versions present, in a stable preferred order
-    order = ["v2", "v4", "v5"]
+    order = ["v2", "v4", "v5", "v6"]
     versions = [v for v in order if any(r["version"] == v for r in rows)]
     versions += sorted({r["version"] for r in rows} - set(versions))
 

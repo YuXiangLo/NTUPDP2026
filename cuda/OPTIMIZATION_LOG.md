@@ -96,6 +96,38 @@ python3 ncu_table.py report_vX.ncu-rep
 - **發現**:stall 維持攤平(barrier 2.47 / not_selected 2.21 / wait 2.00 / math 1.82),
   沒有 store throttle。代表 store 流量確實有一點影響,但已不是關鍵路徑。
 
+### v6 — 任意寬度泛化(templated cols/thread)
+`cuda/seam_carve_v6.cu` → `./seam_carve_v6`
+
+- **動機**:v4/v5 把「每個 thread 顧 2 欄」寫死(`c0=tid`, `c1=tid+blockDim.x`),寬度被卡在
+  `2×1024 = 2048`,連 3840×2160 這種大圖都進不來。但 2048 是人為限制,不是硬體限制 ——
+  真正的天花板是 shared memory(兩列 cost `2·W·4` byte ≤ 96KB → 寬度可到 ~12288)。
+- **做法**:把「每 thread 欄數」`CPT` 提升成**編譯期 template 參數**,host 端算
+  `cpt = ceil(W / blockDim.x)` 後分派到對應的 kernel 實體(`switch`,目前實作 1–8,
+  即寬度 ≤ 8192)。欄位用 grid-stride 配置;prefetch 改成固定大小、完全展開的暫存器陣列
+  `epf[CPT]`/`ecur[CPT]`,所以**不會 spill 到 local memory**,保留 v5 的 register prefetch。
+  W ≤ 2048 時 `CPT=2`,產生的碼與 v5 逐位元相同(效能、輸出都一致),只是現在更寬的圖
+  (3840 → `CPT=4`)也能跑。int8 back-pointer 沿用 v5。
+- **驗證**:W ≤ 2048 時 v6 輸出應與 v5 bit-identical(同碼路徑);大圖則是 v6 獨有能力。
+- **結果**:待多解析度 benchmark(見下)填入。
+
+---
+
+## 多解析度 benchmark
+
+為了讓報告呈現「效能隨解析度 / 隨 seam 數」的 scaling(而非單一資料點),用
+`cuda/bench.sh` 掃過多張不同解析度的圖 × 多個 seam 比例(寬度的 5% / 10% / 20%)×
+各版本,best-of-N 取最快,輸出 `results.csv`;`cuda/bench_table.py` 再渲染成
+含「對 v2 加速比」的 markdown 表。量的是**整條 pipeline 的 wall-clock**(4 顆 kernel
+全包),與前面 ncu 只看 DP 單顆互補。
+
+```bash
+make
+srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 20 \
+    bash bench.sh small.jpg medium.jpg large.jpg
+python3 bench_table.py results.csv
+```
+
 ---
 
 ## 總結

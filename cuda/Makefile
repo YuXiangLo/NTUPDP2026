@@ -19,7 +19,7 @@ NVCCFLAGS := -O3 -std=c++14 -arch=$(ARCH) -lineinfo
 COOPFLAGS := $(NVCCFLAGS) -rdc=true
 HOSTFLAGS := -O3 -std=c++14
 
-TARGETS := seam_carve seam_carve_v3 seam_carve_v4 seam_carve_v5
+TARGETS := seam_carve seam_carve_v3 seam_carve_v4 seam_carve_v5 seam_carve_v6
 
 all: $(TARGETS)
 
@@ -44,6 +44,13 @@ seam_carve_v5.o: seam_carve_v5.cu third_party/stb_image.h third_party/stb_image_
 seam_carve_v5: seam_carve_v5.o stb_impl.o
 	$(NVCC) $(NVCCFLAGS) seam_carve_v5.o stb_impl.o -o seam_carve_v5
 
+# --- v6: v5 generalized to arbitrary width (templated cols/thread) ---
+seam_carve_v6.o: seam_carve_v6.cu third_party/stb_image.h third_party/stb_image_write.h
+	$(NVCC) $(NVCCFLAGS) -c seam_carve_v6.cu -o seam_carve_v6.o
+
+seam_carve_v6: seam_carve_v6.o stb_impl.o
+	$(NVCC) $(NVCCFLAGS) seam_carve_v6.o stb_impl.o -o seam_carve_v6
+
 # --- v3: cooperative multi-SM DP ---
 seam_carve_v3.o: seam_carve_v3.cu third_party/stb_image.h third_party/stb_image_write.h
 	$(NVCC) $(COOPFLAGS) -c seam_carve_v3.cu -o seam_carve_v3.o
@@ -56,6 +63,6 @@ stb_impl.o: stb_impl.cpp third_party/stb_image.h third_party/stb_image_write.h
 	$(NVCC) $(HOSTFLAGS) -c stb_impl.cpp -o stb_impl.o
 
 clean:
-	rm -f $(TARGETS) seam_carve.o seam_carve_v3.o seam_carve_v4.o seam_carve_v5.o stb_impl.o
+	rm -f $(TARGETS) seam_carve.o seam_carve_v3.o seam_carve_v4.o seam_carve_v5.o seam_carve_v6.o stb_impl.o
 
 .PHONY: all clean
