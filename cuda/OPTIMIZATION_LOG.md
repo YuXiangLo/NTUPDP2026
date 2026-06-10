@@ -108,7 +108,8 @@ python3 ncu_table.py report_vX.ncu-rep
   `epf[CPT]`/`ecur[CPT]`,所以**不會 spill 到 local memory**,保留 v5 的 register prefetch。
   W ≤ 2048 時 `CPT=2`,產生的碼與 v5 逐位元相同(效能、輸出都一致),只是現在更寬的圖
   (3840 → `CPT=4`)也能跑。int8 back-pointer 沿用 v5。
-- **驗證**:W ≤ 2048 時 v6 輸出應與 v5 bit-identical(同碼路徑);大圖則是 v6 獨有能力。
+- **驗證**:W ≤ 2048 時 v6 輸出與 v5 **bit-identical**(同碼路徑,已用 `cmp v5.png v6.png` 在
+  1920×1080 上確認 IDENTICAL);大圖則是 v6 獨有能力。
 - **結果**:見下方多解析度 benchmark。重點:**v6 在每個尺寸都 ≥ v5**(泛化零成本,
   template 全展開的 codegen 甚至穩定快 ~4–6%),且 **3840×2160 只有 v6 跑得動**(v5 被 2048 擋掉),
   對 v2 加速 **1.86x(1428)→ 1.82x(1920)→ 2.07x(3840)**——圖越大加速越多。
