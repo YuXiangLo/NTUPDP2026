@@ -147,16 +147,29 @@ srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -c 8 -t 30 \
 # OpenMP 版吃 OMP_NUM_THREADS;srun 配 -c 8 並 export OMP_NUM_THREADS=8
 ```
 
-**CPU ↔ GPU(固定 10 seams,ms/seam,待數據填入):**
+**CPU ↔ GPU(V100,固定 10 seams,best-of-3,ms/seam):**
 
-| 圖 | cpu(1thr) | cpu(omp N) | v0 GPU naive | v6 GPU best | **v6 vs cpu(1thr)** | cpu→omp |
+| 圖 | cpu(1thr) | cpu(omp 4) | v0 GPU naive | v6 GPU best | **v6 vs cpu(1thr)** | cpu→omp(4核) |
 |---|---|---|---|---|---|---|
-| 1428×968  | _待填_ | _待填_ | 2.6843 | 0.8927 | _待填_ | _待填_ |
-| 1920×1080 | _待填_ | _待填_ | 3.0865 | 1.1175 | _待填_ | _待填_ |
-| 3840×2160 | _待填_ | _待填_ | 5.8930 | 3.1456 | _待填_ | _待填_ |
+| 1428×968  | 14.3837 | 5.2757 | 2.7094 | 0.8878 | **16.2x** | 2.73x |
+| 1920×1080 | 21.1454 | 7.1302 | 3.1204 | 1.1226 | **18.8x** | 2.97x |
+| 3840×2160 | 75.1486 | 23.7736 | 6.7891 | 3.1404 | **23.9x** | 3.16x |
 
-> 注意 `-march=native` 在 login node 編、compute node 跑若 ISA 不同可能 `Illegal instruction`;
-> 真遇到就在 compute node 上 `make` 或拿掉 `-march=native`。
+**解讀:**
+
+1. **GPU(v6)對單執行緒 CPU 是 16–24x**,且**圖越大差距越大**(16.2x → 18.8x → 23.9x):大圖
+   每列有更多欄位可餵滿 80 個 SM,GPU 的平行度被用得更滿;CPU 則是固定核數硬啃,面積一大就線性變慢。
+2. **連最 naive 的 GPU(v0)都海放 CPU**:v0 對 cpu(1thr) 已是 5.3x(1428)→ 11x(3840)。
+   也就是「丟上 GPU」本身就拿走大部分的勝利,**我們的 v2→v6 優化是在這之上再 2–3x**。
+3. **OpenMP 4 核只拿到 ~2.7–3.2x、不到理論 4x**:每列 DP 都 fork-join 一次(H 次/seam)有
+   同步開銷,且 energy/DP 是記憶體頻寬受限,核數加倍不等於頻寬加倍。即便如此,**v6 仍比
+   4 核 OpenMP 快 5.9x(1428)/ 6.4x(1920)/ 7.6x(3840)** —— 一張 V100 >> 4 個 CPU 核。
+4. **誠實的 headline**:對單執行緒 CPU baseline,**v6 約 16–24x**;對「已經上 GPU」的 naive 版,
+   v6 再 2.2–3.1x(見下節)。兩段合起來才是完整故事。
+
+> `-march=native` 在 login node 編、compute node 跑若 ISA 不同可能 `Illegal instruction`;
+> 本次在 compute node(gn1221)上實測無此問題。OpenMP 版以 `--export=ALL,OMP_NUM_THREADS=4`
+> 帶入 4 核(該 partition 1 GPU 上限 4 CPU)。
 
 ### 對照 naive baseline(v0)
 
@@ -263,6 +276,9 @@ srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 30 \
 - **對 naive baseline(v0,每列一顆 kernel)**:v0→v6 總計 **3.01x(1428)/ 2.76x(1920)/
   1.87x(3840)**。注意 fusion 在 3840 單獨看反而退步(v2 比 v0 慢,單 SM 啃寬列),靠 v4–v6 的
   latency hiding 才反超——「先 profile、別假設 fusion 一定贏」的又一例證(見上「對照 naive baseline」)。
+- **對 CPU baseline(單執行緒 C++)**:v6 約 **16.2x(1428)/ 18.8x(1920)/ 23.9x(3840)**,
+  圖越大 GPU 贏越多;即使對 4 核 OpenMP CPU 仍快 5.9–7.6x。最底層的故事是
+  **CPU(1thr)→ GPU naive(v0)拿走大頭(5–11x),v0→v6 再 2.2–3.1x**(見上「對照 CPU baseline」)。
 
 ## 關鍵教訓
 
