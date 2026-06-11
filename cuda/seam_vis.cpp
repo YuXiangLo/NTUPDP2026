@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
 
     const size_t npix = (size_t)W0 * H;
     std::vector<float> work(npix * 3), work2(npix * 3), gray(npix), en(npix);
-    std::vector<int> back(npix), seam(H), a, b;
+    std::vector<int> back(npix), seam(H);
     std::vector<float> dpa(W0), dpb(W0);
     for (size_t i = 0; i < npix * 3; ++i) work[i] = pixels[i] / 255.0f;
 
@@ -101,8 +101,7 @@ int main(int argc, char** argv) {
     for (int s = 0; s < num_seams; ++s) {
         grayscale(cur, gray.data(), H, w);
         energy(gray.data(), en.data(), H, w);
-        a.assign(w, 0.0f); b.assign(w, 0.0f);
-        find_seam(en.data(), back.data(), seam.data(), H, w, a, b);
+        find_seam(en.data(), back.data(), seam.data(), H, w, dpa, dpb);
         // record removed columns in original coordinates, then compact row.
         for (int y = 0; y < H; ++y) {
             int sc = seam[y];
