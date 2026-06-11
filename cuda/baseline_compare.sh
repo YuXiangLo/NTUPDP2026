@@ -17,12 +17,16 @@
 #   srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 30 \
 #       bash baseline_compare.sh ../Broadway_tower_edit.jpg ../input1.jpg ../input.jpg
 #
-# Tunables:  SEAMS=10  RUNS=3  BINS="seam_carve_v0 seam_carve seam_carve_v5 seam_carve_v6"
+# The CPU binaries (single-thread + OpenMP) are the host-side reference: the
+# real "GPU vs CPU" headline. seam_carve_cpu is much slower, so keep SEAMS modest.
+#
+# Tunables:  SEAMS=10  RUNS=3
+#   BINS="seam_carve_cpu seam_carve_cpu_omp seam_carve_v0 seam_carve seam_carve_v6"
 set -u
 
 SEAMS="${SEAMS:-10}"
 RUNS="${RUNS:-3}"
-BINS="${BINS:-seam_carve_v0 seam_carve seam_carve_v5 seam_carve_v6}"
+BINS="${BINS:-seam_carve_cpu seam_carve_cpu_omp seam_carve_v0 seam_carve seam_carve_v6}"
 BINDIR="${BINDIR:-.}"
 TMP="${TMPDIR:-/tmp}/seam_base_out.png"
 
@@ -33,11 +37,13 @@ fi
 
 ver_label() {
     case "$1" in
-        seam_carve_v0) echo "v0(naive)" ;;
-        seam_carve)    echo "v2" ;;
-        seam_carve_v5) echo "v5" ;;
-        seam_carve_v6) echo "v6" ;;
-        *)             echo "$1" ;;
+        seam_carve_cpu)     echo "cpu(1thr)" ;;
+        seam_carve_cpu_omp) echo "cpu(omp)" ;;
+        seam_carve_v0)      echo "v0(naive)" ;;
+        seam_carve)         echo "v2" ;;
+        seam_carve_v5)      echo "v5" ;;
+        seam_carve_v6)      echo "v6" ;;
+        *)                  echo "$1" ;;
     esac
 }
 
@@ -60,10 +66,10 @@ bestbin() {
 # header
 hdr="| image | res |"
 for b in $BINS; do hdr="$hdr $(ver_label "$b") |"; done
-hdr="$hdr v6 vs v0 |"
+hdr="$hdr v6 vs cpu | v6 vs v0 |"
 echo
 echo "$hdr"
-sep="|---|---|"; for b in $BINS; do sep="$sep---|"; done; sep="$sep---|"
+sep="|---|---|"; for b in $BINS; do sep="$sep---|"; done; sep="$sep---|---|"
 echo "$sep"
 
 for img in "$@"; do
@@ -71,17 +77,19 @@ for img in "$@"; do
     res=$("$BINDIR/seam_carve" "$img" 1 "$TMP" 2>&1 | sed -nE 's/.*: ([0-9]+x[0-9]+),.*/\1/p' | head -1)
 
     row="| $img | ${res:-?} |"
-    v0_ms=""; v6_ms=""
+    cpu_ms=""; v0_ms=""; v6_ms=""
     for b in $BINS; do
         ms=$(bestbin "$b" "$img")
+        [ "$b" = "seam_carve_cpu" ] && cpu_ms="$ms"
         [ "$b" = "seam_carve_v0" ] && v0_ms="$ms"
         [ "$b" = "seam_carve_v6" ] && v6_ms="$ms"
         row="$row ${ms:-–} |"
     done
+    spc=$(awk -v a="$cpu_ms" -v b="$v6_ms" 'BEGIN{ if(a=="" || b=="")exit; printf "%.0fx", a/b }')
     sp=$(awk -v a="$v0_ms" -v b="$v6_ms" 'BEGIN{ if(a=="" || b=="")exit; printf "%.1fx", a/b }')
-    row="$row ${sp:-–} |"
+    row="$row ${spc:-–} | ${sp:-–} |"
     echo "$row"
 done
 
 echo
-echo "(ms/seam, best-of-$RUNS, SEAMS=$SEAMS; last column = v0/v6)"
+echo "(ms/seam, best-of-$RUNS, SEAMS=$SEAMS; 'v6 vs cpu' = cpu(1thr)/v6, 'v6 vs v0' = v0/v6)"

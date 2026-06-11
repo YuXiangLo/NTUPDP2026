@@ -131,6 +131,33 @@ srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 20 \
 python3 bench_table.py results.csv
 ```
 
+### 對照 CPU baseline(整條故事的最底層)
+
+v0–v6 都是 GPU 內部的比較。報告最直觀的一條線是 **GPU vs CPU**。同工具鏈寫了一支
+standalone C++ 版 `seam_carve_cpu.cpp`(grayscale / energy / DP / tie-break 與 `seam_carve.cu`
+逐位元一致,共用同一套 stb_image I/O、同樣印 `ms/seam`),編出兩支 binary:
+`seam_carve_cpu`(單執行緒,`-O3 -march=native`)和 `seam_carve_cpu_omp`(`-fopenmp`,
+跨核平行 grayscale/energy/每列 DP cells;列→列相依仍序列,與 GPU 同理)。
+跑 `bash baseline_compare.sh` 時 CPU 兩支會自動被納入(SEAMS 預設 10,CPU 較慢故維持小量）。
+
+```bash
+make            # 會一併編 seam_carve_cpu / seam_carve_cpu_omp
+srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -c 8 -t 30 \
+    bash baseline_compare.sh ../Broadway_tower_edit.jpg ../input1.jpg ../input.jpg
+# OpenMP 版吃 OMP_NUM_THREADS;srun 配 -c 8 並 export OMP_NUM_THREADS=8
+```
+
+**CPU ↔ GPU(固定 10 seams,ms/seam,待數據填入):**
+
+| 圖 | cpu(1thr) | cpu(omp N) | v0 GPU naive | v6 GPU best | **v6 vs cpu(1thr)** | cpu→omp |
+|---|---|---|---|---|---|---|
+| 1428×968  | _待填_ | _待填_ | 2.6843 | 0.8927 | _待填_ | _待填_ |
+| 1920×1080 | _待填_ | _待填_ | 3.0865 | 1.1175 | _待填_ | _待填_ |
+| 3840×2160 | _待填_ | _待填_ | 5.8930 | 3.1456 | _待填_ | _待填_ |
+
+> 注意 `-march=native` 在 login node 編、compute node 跑若 ISA 不同可能 `Illegal instruction`;
+> 真遇到就在 compute node 上 `make` 或拿掉 `-march=native`。
+
 ### 對照 naive baseline(v0)
 
 上面 v2→v6 的加速是「已經融成一顆 kernel 之後」的增量。真正的起點是 **v0
@@ -144,7 +171,27 @@ srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 30 \
     bash baseline_compare.sh ../Broadway_tower_edit.jpg ../input1.jpg ../input.jpg
 ```
 
-> v0→v6 的 headline 加速比待數據填入(預期數十倍,naive 被 launch overhead 綁死)。
+**分層加速(固定 10 seams,ms/seam):**
+
+| 圖 | v0 naive | v2 fuse | v6 | v0→v2(fusion) | v2→v6(latency hiding) | **v0→v6 總計** |
+|---|---|---|---|---|---|---|
+| 1428×968  | 2.6843 | 1.5746 | 0.8927 | 1.70x | 1.76x | **3.01x** |
+| 1920×1080 | 3.0865 | 1.9218 | 1.1175 | 1.61x | 1.72x | **2.76x** |
+| 3840×2160 | 5.8930 | **6.6595** | 3.1456 | **0.88x** ⚠️ | 2.12x | **1.87x** |
+
+**解讀(這裡比「單純報一個大倍數」更有資訊量):**
+
+1. **naive baseline 並沒有慢數十倍,只差 ~3x** —— 因為 v0 每列雖然發一顆 kernel,**那顆
+   kernel 仍用整顆 GPU(80 SM)平行算 W 個欄位**;列夠寬時 launch overhead 被執行時間蓋掉。
+   (原始 torch `CUDA_v0` 每列還多 ~6 個 op + python 迴圈 overhead,會比我們這顆精實的
+   1-launch/列更慢,所以 3x 是**保守下界**,對真正 torch 的差距更大。)
+2. **fusion 在大圖反而退步**:1428/1920 上 v0→v2 是 1.6–1.7x 的勝利,但 3840 上 **v2(6.66)
+   比 naive(5.89)還慢(0.88x)**。把整個 DP 融進**單一 block = 1 個 SM**,要用 1024 threads
+   啃 3840 寬的列,單 SM 吞吐拚不過 naive「每列全 GPU 平行」。**fusion 不是各尺度都免費。**
+3. **是 latency hiding 才讓單-block 路線全面獲勝**:v4 prefetch / v5 int8 / v6 泛化貢獻
+   v2→v6 的 1.7–2.1x;唯有加上它們,融合路線才在大圖以 v6 1.87x 反超 naive。
+4. **誠實的 headline**:對精實 naive GPU baseline,典型圖約 **3x**;單-block 的賭注能贏,
+   靠的是每步優化(尤其寬度變大時)。
 
 ### 結果(V100,best-of-3,單位 ms/seam = 整條 pipeline)
 
@@ -213,6 +260,9 @@ srun -N 1 -n 1 --gpus-per-node 1 -A ACD115083 -t 30 \
   無單一魔王),逼近「H 列序列依賴」這條路的延遲地板。
 - **v6 是能力終點**:在不損效能(實測還微幅更快)的前提下把寬度上限從 2048 推到 ~8192(可再調),
   讓 3840×2160 也能跑——這是涵蓋三解析度 scaling 報告的必要條件。
+- **對 naive baseline(v0,每列一顆 kernel)**:v0→v6 總計 **3.01x(1428)/ 2.76x(1920)/
+  1.87x(3840)**。注意 fusion 在 3840 單獨看反而退步(v2 比 v0 慢,單 SM 啃寬列),靠 v4–v6 的
+  latency hiding 才反超——「先 profile、別假設 fusion 一定贏」的又一例證(見上「對照 naive baseline」)。
 
 ## 關鍵教訓
 
