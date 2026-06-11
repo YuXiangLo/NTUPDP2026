@@ -108,8 +108,7 @@ seam carving, dynamic programming, CUDA, GPU optimization, memory latency, V100
 \vspace{0.5em}
 \noindent\fbox{\parbox{0.97\columnwidth}{\textbf{Project Category:}\quad
 $\boxtimes$~\textbf{A} (Self-chosen topic)\qquad
-$\square$~\textbf{B} (AI-agent code optimization)\\[2pt]
-\footnotesize Tick exactly one. This tells reviewers which lens to apply.}}
+$\square$~\textbf{B} (AI-agent code optimization)}}
 
 %------------------------------------------------------------------------------
 \section{Introduction}
@@ -426,8 +425,8 @@ at 4K, where fusion alone barely helps and latency hiding carries the win.}
 \end{figure}
 
 \textbf{Scaling in seams and pixels.} Across 5\%/10\%/20\% width removal, v6's
-ms/seam is constant to within $\sim$5\% on each image, so total time is essentially
-linear in the number of seams. Across images (Fig.~\ref{fig:scaling}), v6's
+ms/seam is constant to within a few percent ($\sim$4\%) on each image, so total
+time is essentially linear in the number of seams. Across images (Fig.~\ref{fig:scaling}), v6's
 ms/seam grows \emph{sublinearly} with pixel count: a $6.0\times$ increase in
 pixels (1.38\,$\to$\,8.29\,MP) costs only $\sim$4.1$\times$ more time
 (0.74\,$\to$\,3.01\,ms/seam), so the per-pixel cost actually improves on larger
@@ -473,8 +472,9 @@ lesson: \emph{profile before assuming fusion wins}.
 \textbf{Why the single-block design wins anyway.} What rescues the fused path at
 4K is latency hiding, not parallelism. v4's prefetch overlaps the energy load
 with arithmetic; v5 quarters the back-store volume. Together they take v6 to
-$\sim$2.1$\times$ over \emph{both} v1 and v2 at 4K (Table~\ref{tab:e2e};
-$6.79/3.14$ and $6.73/3.14$), converting fusion's break-even into a clear win.
+$2.2\times$ over v1 and $2.1\times$ over v2 at 4K (Table~\ref{tab:e2e};
+$6.79/3.14=2.16$, $6.73/3.14=2.14$), converting fusion's break-even into a clear
+win.
 The serial $H$-row chain is irreducible, so the only lever is making each
 row-step cheaper---exactly what v4/v5 do, and exactly why the multi-SM v3 (which
 instead adds barrier cost) failed.
