@@ -230,6 +230,7 @@ cuda/seam_carve_v5
 cuda/seam_carve_v6
 cuda/seam_carve_cpu
 cuda/seam_carve_cpu_omp
+cuda/seam_vis
 cuda/*.o
 cuda/*.ncu-rep
 cuda/results.csv

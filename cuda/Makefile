@@ -23,7 +23,7 @@ HOSTFLAGS := -O3 -std=c++14
 CPUFLAGS  := -O3 -std=c++14 -march=native -funroll-loops
 
 TARGETS := seam_carve seam_carve_v0 seam_carve_v3 seam_carve_v4 seam_carve_v5 seam_carve_v6 \
-           seam_carve_cpu seam_carve_cpu_omp
+           seam_carve_cpu seam_carve_cpu_omp seam_vis
 
 all: $(TARGETS)
 
@@ -76,6 +76,10 @@ seam_carve_cpu: seam_carve_cpu.cpp stb_impl.o third_party/stb_image.h third_part
 # --- CPU baseline: same source built with OpenMP (set OMP_NUM_THREADS at run time) ---
 seam_carve_cpu_omp: seam_carve_cpu.cpp stb_impl.o third_party/stb_image.h third_party/stb_image_write.h
 	$(CXX) $(CPUFLAGS) -fopenmp seam_carve_cpu.cpp stb_impl.o -o seam_carve_cpu_omp
+
+# --- seam_vis: CPU tool that renders the paper's before/seams/after figures ---
+seam_vis: seam_vis.cpp stb_impl.o third_party/stb_image.h third_party/stb_image_write.h
+	$(CXX) $(HOSTFLAGS) seam_vis.cpp stb_impl.o -o seam_vis
 
 # --- shared image I/O (host-only translation unit) ---
 stb_impl.o: stb_impl.cpp third_party/stb_image.h third_party/stb_image_write.h
