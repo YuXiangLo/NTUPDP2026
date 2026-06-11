@@ -294,9 +294,9 @@ traffic to reach the latency floor of the serial row chain, where no single
 stall reason dominates.
 
 \begin{table}[t]
-\caption{Fused DP kernel per version (1428$\times$968, Nsight, first seam). v1
-(naive) issues $H$ per-row launches with no single fused kernel, so the
-single-kernel timeline starts at v2.}
+\caption{DP kernel per version (1428$\times$968, Nsight, first seam). v1 is the
+naive baseline---$H$ per-row launches, with no single fused kernel to profile;
+its end-to-end cost is in Table~\ref{tab:e2e}.}
 \label{tab:versions}
 \centering
 \footnotesize
@@ -304,6 +304,7 @@ single-kernel timeline starts at v2.}
 \toprule
 Ver. & DP dur. (ms) & vs v2 & Key technique \\
 \midrule
+v1 & ---   & ---          & naive: $H$ per-row launches (no fused kernel) \\
 v2 & 1.46  & 1.00$\times$ & fused single-block, shared-mem ping-pong \\
 v3 & 1.66  & 0.88$\times$ & \texttt{grid.sync()} per row (regressed) \\
 v4 & 0.872 & 1.67$\times$ & software-pipelined energy prefetch \\
@@ -331,8 +332,9 @@ v6 & 0.790 & 1.85$\times$ & + width generalization (templated) \\
 \node[red,font=\scriptsize] at (axis cs:v3,1.78) {regressed};
 \end{axis}
 \end{tikzpicture}
-\caption{DP duration per version. v3 (multi-SM \texttt{grid.sync}) is slower than
-the fused v2; prefetch (v4) is the largest single drop.}
+\caption{Fused DP-kernel duration per version (v1 naive omitted---per-row
+launches, no single kernel). v3 (multi-SM \texttt{grid.sync}) is slower than the
+fused v2; prefetch (v4) is the largest single drop.}
 \label{fig:versions}
 \end{figure}
 
