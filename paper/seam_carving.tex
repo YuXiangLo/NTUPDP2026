@@ -122,16 +122,19 @@ win at 4K comes entirely from latency hiding.
 
 \begin{figure*}[t]
   \centering
-  \begin{minipage}[b]{0.32\textwidth}\centering
-    \includegraphics[width=\linewidth]{figures/broadway_orig.jpg}\\[2pt]
+  % Align the three panels by HEIGHT (seam carving keeps height fixed and only
+  % narrows the width), so panel (c) correctly appears narrower than (a)/(b).
+  \newlength{\carvefigh}\setlength{\carvefigh}{3.1cm}
+  \begin{minipage}[b]{0.33\textwidth}\centering
+    \includegraphics[height=\carvefigh]{figures/broadway_orig.jpg}\\[2pt]
     {\footnotesize (a) Original}
   \end{minipage}\hfill
-  \begin{minipage}[b]{0.32\textwidth}\centering
-    \includegraphics[width=\linewidth]{figures/broadway_seams.png}\\[2pt]
+  \begin{minipage}[b]{0.33\textwidth}\centering
+    \includegraphics[height=\carvefigh]{figures/broadway_seams.png}\\[2pt]
     {\footnotesize (b) Removed seams (red)}
   \end{minipage}\hfill
-  \begin{minipage}[b]{0.32\textwidth}\centering
-    \includegraphics[width=\linewidth]{figures/broadway_carved.png}\\[2pt]
+  \begin{minipage}[b]{0.33\textwidth}\centering
+    \includegraphics[height=\carvefigh]{figures/broadway_carved.png}\\[2pt]
     {\footnotesize (c) After carving}
   \end{minipage}
   \caption{Content-aware resizing on Broadway (1428$\times$968). (a) input;
