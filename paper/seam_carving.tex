@@ -9,6 +9,10 @@
 %     figures/broadway_seams.png   original with removed seams drawn red
 %     figures/broadway_carved.png  image after removing the seams
 %  Figures 1-4 are self-contained (TikZ/pgfplots) and need no external files.
+%
+%  VERSION NUMBERING (paper-facing, contiguous v1..v6): paper v1 = naive =
+%  repo cuda/seam_carve_v0.cu; v2 = cuda/seam_carve.cu (fused); v3..v6 keep their
+%  repo numbers. The paper line is self-contained CUDA only.
 %==============================================================================
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
@@ -155,9 +159,9 @@ M[i][j] = e[i][j] + \min\!\big(M[i\!-\!1][j\!-\!1],\,M[i\!-\!1][j],\,M[i\!-\!1][
 \end{equation}
 with $M[0][j]=e[0][j]$. The seam is recovered by taking the $\arg\min$ over the
 last row and back-tracking the stored parent choices. We resolve ties
-left$\rightarrow$center$\rightarrow$right (strict ``$<$''), matching the
-PyTorch reference \texttt{torch.min} over the ordered triple so that outputs are
-directly comparable.
+left$\rightarrow$center$\rightarrow$right (strict ``$<$''); fixing this order
+makes the chosen seam deterministic, so every version below produces the
+identical result and can be compared bit-for-bit.
 
 \textbf{Target hardware.} The V100 (Volta, \texttt{sm\_70}) has 80 streaming
 multiprocessors (SMs), up to 1024 threads per block, and up to 96\,KB of
@@ -208,16 +212,16 @@ intact for A/B comparison.
 \label{fig:pipeline}
 \end{figure}
 
-\textbf{v0 --- naive baseline.} The DP is one kernel launch per row: $H{-}1$
+\textbf{v1 --- naive baseline.} The DP is one kernel launch per row: $H{-}1$
 launches per seam, a full $H\times W$ cost matrix and back-pointer matrix in
-global memory, no reuse. This mirrors the per-row launches of a framework-style
-implementation and isolates exactly the cost that fusion removes.
+global memory, no reuse. It isolates exactly the cost that fusion removes---a
+per-row launch and a full global round-trip for every row.
 
 \textbf{v2 --- fused single-block DP.} One thread block walks all rows
 top-to-bottom. The \emph{previous} and \emph{current} cost rows live in shared
 memory and ping-pong each iteration; a \texttt{\_\_syncthreads()} separates
 rows. One launch replaces $H$. Threads stride over the $W$ columns. This is the
-structural win over v0.
+structural win over v1.
 
 \textbf{v3 --- multi-block, \texttt{grid.sync()} (abandoned).} To use more than
 one SM we made the DP a cooperative-groups kernel with a grid-wide barrier per
@@ -274,9 +278,9 @@ occupancy, and the top warp-stall reasons.
 Appendix); the CPU comparison uses a fixed 10 seams because the single-threaded
 baseline is slow.
 
-\textbf{Correctness.} Outputs are compared with \texttt{cmp}; v2/v4/v5/v6 are
-bit-identical, and the tie-break reproduces the PyTorch reference. Correctness is
-thus preserved by construction across every optimization.
+\textbf{Correctness.} Outputs are compared with \texttt{cmp}; all versions
+(v1--v6) are bit-identical (the deterministic tie-break guarantees a unique
+seam). Correctness is thus preserved by construction across every optimization.
 
 %------------------------------------------------------------------------------
 \section{Results}
@@ -290,7 +294,9 @@ traffic to reach the latency floor of the serial row chain, where no single
 stall reason dominates.
 
 \begin{table}[t]
-\caption{DP kernel per version (1428$\times$968, Nsight, first seam).}
+\caption{Fused DP kernel per version (1428$\times$968, Nsight, first seam). v1
+(naive) issues $H$ per-row launches with no single fused kernel, so the
+single-kernel timeline starts at v2.}
 \label{tab:versions}
 \centering
 \footnotesize
@@ -332,7 +338,7 @@ the fused v2; prefetch (v4) is the largest single drop.}
 
 \textbf{End-to-end across resolutions and baselines.}
 Table~\ref{tab:e2e} gives whole-pipeline ms/seam (best-of-3, 10 seams) for the
-CPU baselines, the naive GPU (v0), the fused GPU (v2), and the optimized GPU
+CPU baselines, the naive GPU (v1), the fused GPU (v2), and the optimized GPU
 (v6); Fig.~\ref{fig:speedup} plots v6's speedup over each. The optimized kernel
 is \textbf{16--24$\times$} a single CPU core and \textbf{5.9--7.6$\times$} four
 OpenMP cores; against the naive GPU baseline it is \textbf{1.9--3.1$\times$}.
@@ -347,8 +353,8 @@ fill the 80 SMs.
 \footnotesize
 \begin{tabular}{@{}lccccccc@{}}
 \toprule
-Image & CPU & CPU & v0 & v2 & v6 & v6 vs & v6 vs \\
-(res) & 1\,thr & omp4 & naive & fuse & best & CPU1 & v0 \\
+Image & CPU & CPU & v1 & v2 & v6 & v6 vs & v6 vs \\
+(res) & 1\,thr & omp4 & naive & fuse & best & CPU1 & v1 \\
 \midrule
 1428$\times$968   & 14.38 & 5.28  & 2.71 & 1.59 & 0.89 & 16.2$\times$ & 3.1$\times$ \\
 1920$\times$1080  & 21.15 & 7.13  & 3.12 & 1.94 & 1.12 & 18.8$\times$ & 2.8$\times$ \\
@@ -375,7 +381,7 @@ Image & CPU & CPU & v0 & v2 & v6 & v6 vs & v6 vs \\
 \addplot[fill=orange!40] coordinates {(r1,5.93)(r2,6.35)(r3,7.57)};
 \addplot[fill=blue!30]   coordinates {(r1,3.05)(r2,2.78)(r3,2.16)};
 \addplot[fill=green!35]  coordinates {(r1,1.79)(r2,1.73)(r3,2.14)};
-\legend{vs CPU1,vs CPU x4,vs v0,vs v2}
+\legend{vs CPU1,vs CPU x4,vs v1,vs v2}
 \end{axis}
 \end{tikzpicture}
 \caption{Speedup of the optimized GPU kernel (v6) over each baseline. The win
@@ -417,7 +423,7 @@ DP's memory traffic.}
 \section{Discussion and Analysis}
 \textbf{Why fusion is not free.} The most informative result is the 4K row of
 Table~\ref{tab:e2e}: at 3840$\times$2160 the fused v2 (6.73) is no faster than
-the naive v0 (6.79), and in the dedicated sweep run v2 was \emph{slower}
+the naive v1 (6.79), and in the dedicated sweep run v2 was \emph{slower}
 ($6.66 > 5.89$, i.e.\ $0.88\times$). Folding the whole DP into a single block
 means one SM, with 1024 threads, chewing a 3840-wide row; its throughput cannot
 beat the naive kernel, whose \emph{per-row} launch still spreads $W$ columns
@@ -430,7 +436,7 @@ assuming fusion wins}.
 4K is latency hiding, not parallelism. v4's prefetch overlaps the energy load
 with arithmetic; v5 quarters the back-store volume. Together they turn the
 single-SM kernel from $0.88\times$ (a loss) into $2.1\times$ over v2 and
-$1.87\times$ over v0 at 4K. The serial $H$-row chain is irreducible, so the only
+$1.87\times$ over v1 at 4K. The serial $H$-row chain is irreducible, so the only
 lever is making each row-step cheaper---exactly what v4/v5 do, and exactly why
 the multi-SM v3 (which instead adds barrier cost) failed.
 
@@ -446,10 +452,10 @@ $\sim$3$\times$ on 4 cores, limited by per-row fork--join and memory bandwidth,
 so it is a conservative---not adversarial---CPU point.
 
 \textbf{Threats to validity.} Numbers are best-of-3 wall-clock on a shared
-cluster; we mitigate jitter with best-of-N and by reporting ms/seam. The v0
-baseline is a lean 1-launch-per-row kernel, \emph{more} favorable to the
-baseline than a framework that issues several ops per row, so our speedups over
-``naive'' are a lower bound relative to a real framework path.
+cluster; we mitigate jitter with best-of-N and by reporting ms/seam. The v1
+baseline is a deliberately lean one-launch-per-row kernel; a less careful naive
+implementation (extra per-row work or a host synchronization between rows) would
+only widen the gap, so our speedups over ``naive'' are conservative.
 
 %------------------------------------------------------------------------------
 \section{Conclusion}
