@@ -1,0 +1,35 @@
+%------------------------------------------------------------------------------
+\section{Experimental Setup}
+\label{sec:setup}
+\textbf{Hardware.} NVIDIA V100 (\texttt{sm\_70}, 80 SMs, 96\,KB shared memory
+opt-in) on the TWCC Taiwania-2 cluster, jobs placed by SLURM. The V100 is the
+GPU class the course provides on this shared cluster---newer architectures are
+not available to us---so we treat it as a fixed constraint; the techniques
+studied (latency hiding, halo tiling, compact back-pointers) are
+architecture-general, not Volta-specific. Nodes have 36 cores
+and 8 GPUs; SLURM gates CPUs at ${\approx}4$ per GPU, so the multicore CPU
+baseline reserves all 8 GPUs to obtain a 32-core allocation.
+
+\textbf{Software.} CUDA 12.8, \texttt{nvcc -O3 -arch=sm\_70}; CPU code
+\texttt{gcc -O3 -march=native -funroll-loops}. I/O via \texttt{stb\_image}.
+
+\textbf{CPU baseline.} A host-side implementation mirrors the CUDA kernels
+bit-for-bit (verified by \texttt{cmp} vs.\ the sequential reference). Our best
+OpenMP variant keeps the team alive for the whole carve (one persistent parallel
+region, not a per-row re-spawn), uses NUMA-aware parallel first-touch, and
+ping-pongs the two live DP cost rows in cache. We report the CPU baseline as the
+\emph{best ms/seam over 1--32 threads} (Appendix~\ref{app:omp}, optimum at
+8--32); speedups are stated against both a single core and this configuration.
+
+\textbf{Measurement.} We time the full carving loop (all four kernels, all
+seams): \texttt{cudaEvent} on GPU, \texttt{std::chrono} on CPU.
+We report \textbf{best-of-3} runs as \textbf{ms per seam} (50 seams unless
+otherwise noted). Kernel-level profiling uses Nsight Compute (\texttt{ncu}).
+
+\textbf{Workload.} Benchmarks use six resolutions spanning 0.52--33.2\,MP:
+ctrl ($960{\times}540$), 1080p ($1920{\times}1080$), 2K ($2560{\times}1440$),
+4K ($3840{\times}2160$), 6K ($6144{\times}3456$), 8K ($7680{\times}4320$).
+
+\textbf{Correctness.} All configurations are compared with \texttt{cmp};
+every configuration is bit-identical to every other on the resolutions it
+supports. The deterministic tie-break guarantees a unique seam.

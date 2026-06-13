@@ -1,0 +1,26 @@
+% Appendix Table — Full multi-resolution crop-ratio sweep
+% Protocol: wall-clock, best-of-3, varying seam counts (5%/10%/20% of width)
+% BytePtr limited to W≤2048 (fails at 3840-wide)
+\begin{table}[h!]
+\caption{ms/seam by image, crop ratio, and configuration (best-of-3).
+ms/seam is nearly flat across crop ratios, confirming linear scaling in seam count.}
+\label{tab:sweep}
+\centering
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Image} & \textbf{Crop} & \textbf{\emph{Fused}} & \textbf{\emph{BytePtr}} & \textbf{\emph{Templated}} \\
+\midrule
+Broadway          & 5\%  & 1.40 & 0.786 & 0.754 \\
+1428$\times$968   & 10\% & 1.38 & 0.778 & 0.743 \\
+                  & 20\% & 1.35 & 0.763 & 0.724 \\
+\midrule
+input1            & 5\%  & 1.73 & 1.02  & 0.958 \\
+1920$\times$1080  & 10\% & 1.72 & 1.00  & 0.945 \\
+                  & 20\% & 1.70 & 0.979 & 0.923 \\
+\midrule
+input             & 5\%  & 6.23 & ---   & 3.07  \\
+3840$\times$2160  & 10\% & 6.20 & ---   & 3.02  \\
+                  & 20\% & 6.22 & ---   & 2.94  \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,24 @@
+% Appendix Table — Batch multi-seam speedup
+% Single: one seam per DP pass (exact, Tiled+Prefetch).
+% Batch : K=60 seams per DP pass (approximate; batch-remove kernel).
+% Speedup = single ms/seam ÷ batch ms/seam.
+\begin{table}[h!]
+\caption{Approximate batch multi-seam removal ($K{=}60$ seams per DP pass).
+Single-seam baseline is \emph{Tiled}+Prefetch (exact).
+Batch extracts $K$ strip-local seams from one DP pass and removes them
+in a single GPU read/write pass over the image.}
+\label{tab:batch}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Resolution} & \textbf{Single (ms/seam)} & \textbf{Batch (ms/seam)} & \textbf{Speedup} \\
+\midrule
+ctrl  $960{\times}540$   & 0.279 & 0.0061 & $46{\times}$ \\
+1080p $1920{\times}1080$ & 0.803 & 0.0162 & $50{\times}$ \\
+2K    $2560{\times}1440$ & 1.226 & 0.0241 & $51{\times}$ \\
+4K    $3840{\times}2160$ & 2.147 & 0.0401 & $54{\times}$ \\
+6K    $6144{\times}3456$ & 4.147 & 0.0765 & $54{\times}$ \\
+8K    $7680{\times}4320$ & 5.729 & 0.1028 & $56{\times}$ \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,23 @@
+% Appendix Table — tiled DP wall-time vs number of active strips.
+% Source: cuda/strip_microbench.cu (V100, best of 30). Shows the DP is
+% latency-bound (flat in strip count), so a cone-restricted incremental DP
+% cannot speed up single-seam carving on the GPU.
+\begin{table}[h!]
+\caption{Tiled DP wall-time is nearly flat in the number of active strips
+(V100, best of 30): the $T$-row serial tile chain---not strip parallelism---sets
+the latency. Restricting to the ${\approx}24\%$-column influence cone (${\sim}15$
+strips) would idle SMs without shortening the critical path, so incremental
+recomputation yields no GPU speedup.}
+\label{tab:strip}
+\centering
+\begin{tabular}{@{}rrr@{}}
+\toprule
+\textbf{Active strips} & \textbf{8K DP (ms)} & \textbf{4K DP (ms)} \\
+\midrule
+60 (100\%) & 1.97 & 0.85 \\
+30 (50\%)  & 1.81 & 0.85 \\
+20 (33\%)  & 1.79 & 0.85 \\
+10 (17\%)  & 1.77 & 0.80 \\
+\bottomrule
+\end{tabular}
+\end{table}

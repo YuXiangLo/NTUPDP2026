@@ -1,0 +1,29 @@
+% Appendix Table — TRUE multicore OpenMP thread-scaling (best-of-3, ms/seam).
+% Binary: seam_carve_omp_v4 (persistent parallel region + NUMA-aware parallel
+% first-touch + 2-row cache ping-pong), gcc -O3 -march=native -funroll-loops.
+% Allocation: 8 GPUs reserved on a 36-core/8-GPU node to obtain 32 host cores
+% (SLURM gates ~4 CPUs per GPU). OMP_PROC_BIND=close, OMP_PLACES=cores.
+% Source: bench/sbatch_omp_final.sh, results/omp_scaling_full.md.
+\begin{table}[h!]
+\caption{True multicore OpenMP thread-scaling (ms/seam, best-of-3) of our
+NUMA-aware baseline. \textbf{Bold} = best per resolution. The optimum is at
+8--32 threads; small images turn over earlier (per-row barrier cost), large
+images keep scaling (bandwidth-bound). The earlier ``regression past 4 threads''
+was an artifact of a 4-CPU job allocation oversubscribed by higher thread
+counts, not the algorithm.}
+\label{tab:omp}
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Threads} & \textbf{ctrl} & \textbf{1080p} & \textbf{4K} & \textbf{8K} \\
+\midrule
+1  & 5.58 & 25.03 & 101.13 & 394.37 \\
+2  & 3.01 & 13.05 & 51.76  & 197.93 \\
+4  & 1.71 & 7.05  & 27.21  & 103.73 \\
+8  & \textbf{1.14} & 4.13 & 15.01 & 55.55 \\
+16 & 1.34 & \textbf{3.59} & 10.45 & 37.55 \\
+24 & 2.66 & 5.24 & 10.13 & 35.79 \\
+32 & 3.54 & 6.50 & \textbf{9.88} & \textbf{35.42} \\
+\bottomrule
+\end{tabular}
+\end{table}

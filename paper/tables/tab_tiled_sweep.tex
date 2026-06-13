@@ -1,0 +1,31 @@
+% Appendix Table — Tiled K×T parameter sweep (ms/seam, with prefetch)
+% Protocol: wall-clock, best-of-3, 50 seams.
+% Data from results/tiled_sweep.md
+% Bold = optimum per resolution. Default config: K=60, T=64.
+\begin{table}[h!]
+\caption{\emph{Tiled}+Prefetch ms/seam across the $3{\times}3$ parameter sweep
+($K{\in}\{40,60,80\}$ strips, $T{\in}\{32,64,128\}$ rows/tile).
+\textbf{Bold} = best per resolution; default ($K{=}60$, $T{=}64$) is within
+1.2\% of the optimum at both resolutions.}
+\label{tab:tilesweep}
+\centering
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\multicolumn{4}{c}{\textbf{4K (3840$\times$2160) — ms/seam}} \\
+\midrule
+$K$ \textbackslash\ $T$ & $T{=}32$ & $T{=}64$ & $T{=}128$ \\
+\midrule
+$K{=}40$ & 2.247 & 2.169 & 2.146 \\
+$K{=}60$ & 2.246 & 2.164 & 2.139 \\
+$K{=}80$ & 2.245 & 2.165 & \textbf{2.139} \\
+\midrule
+\multicolumn{4}{c}{\textbf{8K (7680$\times$4320) — ms/seam}} \\
+\midrule
+$K$ \textbackslash\ $T$ & $T{=}32$ & $T{=}64$ & $T{=}128$ \\
+\midrule
+$K{=}40$ & 5.917 & 5.792 & 5.723 \\
+$K{=}60$ & 5.901 & 5.738 & 5.696 \\
+$K{=}80$ & 5.885 & 5.723 & \textbf{5.686} \\
+\bottomrule
+\end{tabular}
+\end{table}

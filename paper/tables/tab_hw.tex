@@ -1,0 +1,22 @@
+% Table III — Kernel hardware footprint (transposed: methods as columns)
+% Register counts from Nsight Compute; shmem calculated from kernel structure.
+% Fused/GridStride shmem = 5W bytes (2×ping-pong int16 + back-ptr int8 per row).
+% Tiled shmem = 5(S+2T) bytes from Eq.(3), constant regardless of W.
+\begin{table}[t]
+\caption{Kernel hardware footprint (register counts from Nsight Compute;
+shared memory calculated from kernel structure).
+\emph{Fused}/\emph{GridStride} shared memory scales with $W$;
+\emph{Tiled}'s 0.9\,KB/block is independent of $W$ (Eq.~\eqref{eq:shmem}).}
+\label{tab:hw}
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & \emph{Fused} & \emph{GridStride} & \textbf{\emph{Tiled}} \\
+ & (1428\,px) & (8K wide) & (8K wide) \\
+\midrule
+Reg / thread   & ${\approx}20$ & ${\approx}18$ & ${\approx}16$ \\
+Shmem / block  & 7.0\,KB       & 37.5\,KB      & \textbf{0.9\,KB} \\
+Active SMs     & 1             & 1             & \textbf{60} \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,101 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand*\HyPL@Entry[1]{}
+\citation{cudaguide}
+\citation{avidan2007}
+\citation{duarte2012}
+\citation{kiess2014}
+\citation{kim2015}
+\HyPL@Entry{0<</S/D>>}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\citation{avidan2007}
+\citation{rubinstein2008}
+\citation{stultz2008}
+\citation{lee2009}
+\citation{mishiba2011}
+\citation{duarte2012}
+\citation{chiang2009}
+\citation{kiess2014}
+\citation{kim2015}
+\citation{harris2007}
+\citation{voltawp}
+\citation{harris2007}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Content-aware resizing: low-energy vertical seams (b) are removed iteratively, narrowing the image (c) while preserving salient structure.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:carve}{{1}{2}{Content-aware resizing: low-energy vertical seams (b) are removed iteratively, narrowing the image (c) while preserving salient structure}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Background and Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{eq:dp}{{1}{2}{Background and Related Work}{equation.2.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Algorithm on a $4\times 4$ toy image. \textbf  {(a)} Energy map $e_{i,j}$ (gradient magnitude); seam cells shaded. \textbf  {(b)} Cumulative DP cost $M_{i,j}$ (Eq.\nobreakspace  {}\textup  {\hbox {\mathsurround \z@ \normalfont  (\ignorespaces \ref  {eq:dp}\unskip \@@italiccorr )}}); the minimum-cost path (shaded, dashed arrow) is back-tracked from $\qopname  \relax o{arg}\qopname  \relax m{min}$ of $r_3$. Removing the shaded column yields a $4\times 3$ image.}}{2}{figure.2}\protected@file@percent }
+\newlabel{fig:dpstages}{{2}{2}{Algorithm on a $4\times 4$ toy image. \textbf {(a)} Energy map $e_{i,j}$ (gradient magnitude); seam cells shaded. \textbf {(b)} Cumulative DP cost $M_{i,j}$ (Eq.~\eqref {eq:dp}); the minimum-cost path (shaded, dashed arrow) is back-tracked from $\arg \min $ of $r_3$. Removing the shaded column yields a $4\times 3$ image}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Methodology}{2}{section.3}\protected@file@percent }
+\newlabel{sec:method}{{III}{2}{Methodology}{section.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The four-kernel pipeline (top) and the DP's 3-way row dependency (bottom). The $H$ rows are serial; the $W$ columns within each row are parallel.}}{3}{figure.3}\protected@file@percent }
+\newlabel{fig:pipeline}{{3}{3}{The four-kernel pipeline (top) and the DP's 3-way row dependency (bottom). The $H$ rows are serial; the $W$ columns within each row are parallel}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Kernel paradigm comparison. \textbf  {Naive} launches $H$ kernels (one per row) with a global-memory round-trip each time. \textbf  {Fused} collapses all rows into one kernel: rows exchange via a shared-memory ping-pong with \texttt  {\_\_syncthreads} between them. \textbf  {Tiled} runs $K$ blocks in parallel (one strip per SM); each tile of $T$ rows stays entirely in shared memory and only exchanges one cost row per strip through global memory at the tile boundary, reducing kernel launches from $H$ to $\lceil H/T\rceil $.}}{3}{figure.4}\protected@file@percent }
+\newlabel{fig:kerneldesign}{{4}{3}{Kernel paradigm comparison. \textbf {Naive} launches $H$ kernels (one per row) with a global-memory round-trip each time. \textbf {Fused} collapses all rows into one kernel: rows exchange via a shared-memory ping-pong with \texttt {\_\_syncthreads} between them. \textbf {Tiled} runs $K$ blocks in parallel (one strip per SM); each tile of $T$ rows stays entirely in shared memory and only exchanges one cost row per strip through global memory at the tile boundary, reducing kernel launches from $H$ to $\lceil H/T\rceil $}{figure.4}{}}
+\citation{kim2015}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textbf  {Tiled} strip and halo layout. \textit  {Top}: The $W$ columns are divided into $K$ strips; each strip is extended by $T$ halo columns on each side (orange). Adjacent strips share halo columns without a barrier. \textit  {Bottom}: Within a tile of $T$ rows, one block computes entirely in shared memory. The seam drifts at most one column per row, so after $T$ rows the error stays inside the orange halo; the blue center is bit-exact. Only the center strip is written to \texttt  {d\_next} at the tile boundary.}}{4}{figure.5}\protected@file@percent }
+\newlabel{fig:tiledhalo}{{5}{4}{\textbf {Tiled} strip and halo layout. \textit {Top}: The $W$ columns are divided into $K$ strips; each strip is extended by $T$ halo columns on each side (orange). Adjacent strips share halo columns without a barrier. \textit {Bottom}: Within a tile of $T$ rows, one block computes entirely in shared memory. The seam drifts at most one column per row, so after $T$ rows the error stays inside the orange halo; the blue center is bit-exact. Only the center strip is written to \texttt {d\_next} at the tile boundary}{figure.5}{}}
+\newlabel{eq:shmem}{{4}{4}{Methodology}{equation.3.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Setup}{4}{section.4}\protected@file@percent }
+\newlabel{sec:setup}{{IV}{4}{Experimental Setup}{section.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces DP kernel per configuration (1428$\times $968, Nsight, first seam). \emph  {Naive} uses $H$ per-row launches; no single fused kernel to profile. Prefetch/BytePtr improvements verified consistent across standard resolutions.}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:versions}{{I}{4}{DP kernel per configuration (1428$\times $968, Nsight, first seam). \emph {Naive} uses $H$ per-row launches; no single fused kernel to profile. Prefetch/BytePtr improvements verified consistent across standard resolutions}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Kernel hardware footprint (register counts from Nsight Compute; shared memory calculated from kernel structure). \emph  {Fused}/\emph  {GridStride} shared memory scales with $W$; \emph  {Tiled}'s 0.9\,KB/block is independent of $W$ (Eq.\nobreakspace  {}\textup  {\hbox {\mathsurround \z@ \normalfont  (\ignorespaces \ref  {eq:shmem}\unskip \@@italiccorr )}}).}}{4}{table.2}\protected@file@percent }
+\newlabel{tab:hw}{{II}{4}{Kernel hardware footprint (register counts from Nsight Compute; shared memory calculated from kernel structure). \emph {Fused}/\emph {GridStride} shared memory scales with $W$; \emph {Tiled}'s 0.9\,KB/block is independent of $W$ (Eq.~\eqref {eq:shmem})}{table.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Results}{4}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{V}{4}{Results}{section.5}{}}
+\citation{kim2015}
+\citation{lee2009}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces ms/seam vs.\ image size (0.52--33.2\,MP). \textbf  {\emph  {Tiled}+Prefetch} has the lowest slope at all sizes and reaches \textbf  {57$\times $} over CPU at 8K. \emph  {Templated} stops at 4K (register overflow). The gap to \emph  {Fused} widens with image size.}}{5}{figure.6}\protected@file@percent }
+\newlabel{fig:scaling}{{6}{5}{ms/seam vs.\ image size (0.52--33.2\,MP). \textbf {\emph {Tiled}+Prefetch} has the lowest slope at all sizes and reaches \textbf {57$\times $} over CPU at 8K. \emph {Templated} stops at 4K (register overflow). The gap to \emph {Fused} widens with image size}{figure.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion and Analysis}{5}{section.6}\protected@file@percent }
+\newlabel{sec:disc}{{VI}{5}{Discussion and Analysis}{section.6}{}}
+\citation{kim2015}
+\bibcite{avidan2007}{1}
+\bibcite{rubinstein2008}{2}
+\bibcite{stultz2008}{3}
+\bibcite{lee2009}{4}
+\bibcite{mishiba2011}{5}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces End-to-end ms/seam across all methods and resolutions (best-of-3, 50 seams). \textbf  {Bold} = best GPU result per resolution. $\dagger $\emph  {Templated} fails at ${\ge }6$K (register file overflow at CPT\,=\,8). --- indicates not benchmarked or unsupported at that resolution. $\ddagger $ CPU 4-thread OpenMP measured at 2.5--3.0$\times $ over 1T before regressing on 40-core nodes; \emph  {Tiled} speedup vs.\ best CPU at 8K is ${\approx }$19--23$\times $.}}{6}{table.3}\protected@file@percent }
+\newlabel{tab:fullresults}{{III}{6}{End-to-end ms/seam across all methods and resolutions (best-of-3, 50 seams). \textbf {Bold} = best GPU result per resolution. $\dagger $\emph {Templated} fails at ${\ge }6$K (register file overflow at CPT\,=\,8). --- indicates not benchmarked or unsupported at that resolution. $\ddagger $ CPU 4-thread OpenMP measured at 2.5--3.0$\times $ over 1T before regressing on 40-core nodes; \emph {Tiled} speedup vs.\ best CPU at 8K is ${\approx }$19--23$\times $}{table.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{6}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{6}{section*.1}\protected@file@percent }
+\bibcite{chiang2009}{6}
+\bibcite{kim2015}{7}
+\bibcite{kiess2014}{8}
+\bibcite{duarte2012}{9}
+\bibcite{harris2007}{10}
+\bibcite{voltawp}{11}
+\bibcite{cudaguide}{12}
+\bibcite{nsight}{13}
+\bibcite{stb}{14}
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  A: Crop-Ratio Sweep}{7}{section*.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces ms/seam by image, crop ratio, and configuration (best-of-3). ms/seam is nearly flat across crop ratios, confirming linear scaling in seam count.}}{7}{table.4}\protected@file@percent }
+\newlabel{tab:sweep}{{IV}{7}{ms/seam by image, crop ratio, and configuration (best-of-3). ms/seam is nearly flat across crop ratios, confirming linear scaling in seam count}{table.4}{}}
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  B: Batch Multi-Seam Results}{7}{section*.3}\protected@file@percent }
+\newlabel{app:batch}{{B}{7}{\appendixname \nobreakspace \thesectiondis \\* Batch Multi-Seam Results}{section*.3}{}}
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  C: Tiled $K{\times }T$ Parameter Sweep}{7}{section*.4}\protected@file@percent }
+\newlabel{app:sweep}{{C}{7}{\appendixname \nobreakspace \thesectiondis \\* Tiled \texorpdfstring {$K{\times }T$}{K×T} Parameter Sweep}{section*.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Approximate batch multi-seam removal ($K{=}60$ seams per DP pass). Single-seam baseline is \emph  {Tiled}+Prefetch (exact). Batch extracts $K$ strip-local seams from one DP pass and removes them in a single GPU read/write pass over the image.}}{7}{table.5}\protected@file@percent }
+\newlabel{tab:batch}{{V}{7}{Approximate batch multi-seam removal ($K{=}60$ seams per DP pass). Single-seam baseline is \emph {Tiled}+Prefetch (exact). Batch extracts $K$ strip-local seams from one DP pass and removes them in a single GPU read/write pass over the image}{table.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces \emph  {Tiled}+Prefetch ms/seam across the $3{\times }3$ parameter sweep ($K{\in }\{40,60,80\}$ strips, $T{\in }\{32,64,128\}$ rows/tile). \textbf  {Bold} = best per resolution; default ($K{=}60$, $T{=}64$) is within 1\% of the optimum at both resolutions.}}{7}{table.6}\protected@file@percent }
+\newlabel{tab:tilesweep}{{VI}{7}{\emph {Tiled}+Prefetch ms/seam across the $3{\times }3$ parameter sweep ($K{\in }\{40,60,80\}$ strips, $T{\in }\{32,64,128\}$ rows/tile). \textbf {Bold} = best per resolution; default ($K{=}60$, $T{=}64$) is within 1\% of the optimum at both resolutions}{table.6}{}}
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  D: CPU OpenMP Thread Scaling}{7}{section*.5}\protected@file@percent }
+\newlabel{app:omp}{{D}{7}{\appendixname \nobreakspace \thesectiondis \\* CPU OpenMP Thread Scaling}{section*.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces CPU OpenMP thread-scaling (OMP v2, best-of-5, 20 seams). Parallel passes: grayscale, energy, seam removal. The DP row dependency is serial; fork-join overhead per seam limits gains. 4-thread speedup of 2.5--3.0$\times $ over sequential (third row) is the basis for the CPU 4T baseline in Table\nobreakspace  {}\ref  {tab:fullresults}.}}{7}{table.7}\protected@file@percent }
+\newlabel{tab:omp}{{VII}{7}{CPU OpenMP thread-scaling (OMP v2, best-of-5, 20 seams). Parallel passes: grayscale, energy, seam removal. The DP row dependency is serial; fork-join overhead per seam limits gains. 4-thread speedup of 2.5--3.0$\times $ over sequential (third row) is the basis for the CPU 4T baseline in Table~\ref {tab:fullresults}}{table.7}{}}
+\gdef \@abspage@last{7}

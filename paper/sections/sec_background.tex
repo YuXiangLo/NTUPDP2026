@@ -1,0 +1,125 @@
+%------------------------------------------------------------------------------
+\section{Background and Related Work}
+
+\textbf{Seam carving}~\cite{avidan2007} removes \emph{seams}---connected
+pixel paths of least visual importance---to resize images in a
+content-aware manner. For an image of size $H\!\times\!W$ with per-pixel energy
+$e_{i,j}$ (gradient magnitude), the cumulative minimum-cost DP is
+\begin{equation}
+M_{i,j} = e_{i,j} + \min\!\bigl(M_{i-1,\,j-1},\;M_{i-1,\,j},\;M_{i-1,\,j+1}\bigr),
+\label{eq:dp}
+\end{equation}
+with $M_{0,j}=e_{0,j}$. The optimal seam is recovered by back-tracking the
+$\arg\min$ of the last row (Fig.~\ref{fig:dpstages}). Removing $k$ seams
+repeats the full pipeline $k$ times. We resolve ties
+left$\to$center$\to$right (strict ``$<$'') so all configurations are
+bit-comparable.
+Rubinstein~et~al.~\cite{rubinstein2008} extended the framework to video and
+proposed \emph{forward energy}, which prefers seams that introduce less new
+energy after removal, improving visual quality. Their formulation is a drop-in
+replacement for our energy map and orthogonal to all GPU optimizations studied here.
+Parallelizing the DP has been explored on CPUs: Stultz~\cite{stultz2008}
+demonstrated an MPI decomposition but found Amdahl's law limits gains because
+the row dependency serializes across partitions.
+Lee and Kim~\cite{lee2009} proposed a \emph{partial-update} strategy---after
+removing a seam, only the triangular influence region of the DP table is
+recomputed---and a divide-and-conquer column decomposition; together these
+halve per-seam DP work on CPU but require retaining the full $H{\times}W$
+cost table in memory.
+Mishiba and Ikehara~\cite{mishiba2011} partitioned the image into
+blocks and computed seams independently per block, reducing recomputation
+at the cost of seam continuity across boundaries---the CPU analogue of
+\emph{Tiled}'s strip decomposition (Section~\ref{sec:method}).
+
+Figure~\ref{fig:dpstages} illustrates the algorithm on a $4\times4$ toy image.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,
+  cell/.style={draw,minimum size=5mm,inner sep=0pt},
+  scell/.style={draw,minimum size=5mm,inner sep=0pt,fill=red!25,font=\bfseries\scriptsize}]
+
+  % --- (a) Energy map ---
+  \node[font=\footnotesize\bfseries] at (0.75,2.55) {(a) Energy $e$};
+  \node[cell] at (0.0,1.75) {2}; \node[scell] at (0.5,1.75) {1};
+    \node[cell] at (1.0,1.75) {3}; \node[cell] at (1.5,1.75) {2};
+  \node[cell] at (0.0,1.25) {2}; \node[cell] at (0.5,1.25) {3};
+    \node[scell] at (1.0,1.25) {1}; \node[cell] at (1.5,1.25) {2};
+  \node[cell] at (0.0,0.75) {4}; \node[cell] at (0.5,0.75) {5};
+    \node[scell] at (1.0,0.75) {2}; \node[cell] at (1.5,0.75) {4};
+  \node[cell] at (0.0,0.25) {5}; \node[cell] at (0.5,0.25) {6};
+    \node[cell] at (1.0,0.25) {5}; \node[scell] at (1.5,0.25) {4};
+
+  % --- (b) DP cost table ---
+  \node[font=\footnotesize\bfseries] at (3.25,2.55) {(b) DP cost $M$ + seam};
+  % row 0
+  \node[cell] at (2.5,1.75) {2}; \node[scell] at (3.0,1.75) {1};
+    \node[cell] at (3.5,1.75) {3}; \node[cell] at (4.0,1.75) {2};
+  % row 1
+  \node[cell] at (2.5,1.25) {3}; \node[cell] at (3.0,1.25) {4};
+    \node[scell] at (3.5,1.25) {2}; \node[cell] at (4.0,1.25) {4};
+  % row 2
+  \node[cell] at (2.5,0.75) {7}; \node[cell] at (3.0,0.75) {7};
+    \node[scell] at (3.5,0.75) {4}; \node[cell] at (4.0,0.75) {6};
+  % row 3 — argmin = col 3 (val 8)
+  \node[cell] at (2.5,0.25) {12}; \node[cell] at (3.0,0.25) {10};
+    \node[cell] at (3.5,0.25) {9}; \node[scell] at (4.0,0.25) {8};
+  % row labels
+  \node[left=0.5mm,font=\scriptsize] at (2.5,1.75) {$r_0$};
+  \node[left=0.5mm,font=\scriptsize] at (2.5,1.25) {$r_1$};
+  \node[left=0.5mm,font=\scriptsize] at (2.5,0.75) {$r_2$};
+  \node[left=0.5mm,font=\scriptsize] at (2.5,0.25) {$r_3$};
+  % back-track arrow
+  \draw[-{Latex},red!70!black,thick,dashed]
+    (4.0,0.25) -- (3.5,0.75) -- (3.5,1.25) -- (3.0,1.75)
+    node[above,font=\scriptsize,red!70!black] {seam};
+\end{tikzpicture}
+\caption{Algorithm on a $4\times4$ toy image.
+\textbf{(a)} Energy map $e_{i,j}$ (gradient magnitude); seam cells shaded.
+\textbf{(b)} Cumulative DP cost $M_{i,j}$ (Eq.~\eqref{eq:dp}); the
+minimum-cost path (shaded, dashed arrow) is back-tracked from
+$\arg\min$ of $r_3$. Removing the shaded column yields a $4\times3$ image.}
+\label{fig:dpstages}
+\end{figure}
+
+\textbf{GPU implementations of seam carving.}
+Prior GPU work takes three distinct strategies. Duarte and
+Sendag~\cite{duarte2012} kept the per-row-launch model (\emph{Naive} in our
+terminology), achieving 231$\times$ on the energy kernel alone---but the DP
+kernel, which launches one grid per row and reads/writes the full cost matrix
+each time, remained the bottleneck.
+Chiang~et~al.~\cite{chiang2009} used JND-based energy on GPU for real-time
+video retargeting, exploiting data parallelism in the energy stage while
+leaving the sequential DP row dependency unaddressed.
+Kiess~et~al.~\cite{kiess2014} eliminated per-row launches for video retargeting
+by spinning all threads in a single kernel with a global-atomic busy-wait for row
+synchronization, reaching 10.5$\times$ on a GTX~650~Ti; the atomic spin wastes
+warp slots and limits occupancy.
+Kim~et~al.~\cite{kim2015} sidestepped the DP entirely with \emph{Non-Cumulative
+Seam Carving} (NCSC), using raw per-pixel energy instead of cumulative
+cost---a heuristic that gives 76.6$\times$ on a single GPU but sacrifices
+exactness. Their own analysis (\S5.4) found that the exact single-block DP with
+shared memory reached only 5.9$\times$ on their earlier-generation hardware,
+which they deemed insufficient and abandoned. Without claiming hardware
+equivalence, we revisit this \emph{design} and show profiling-driven latency
+hiding makes the exact DP they discarded markedly more competitive. We do not
+claim exactness is always preferable---where throughput dominates we approximate
+too (batch mode, Section~\ref{sec:disc})---only that the choice deserves the
+honest performance picture the abandoned exact DP lacked.
+
+\textbf{CUDA optimization methodology.}
+Harris~\cite{harris2007} characterized the performance of parallel reductions
+on CUDA, establishing the principle of hiding global-memory latency with
+arithmetic---the same technique our \emph{Prefetch} configuration applies to the
+energy load in the DP inner loop. The V100's 80 SMs and 96\,KB per-block
+shared-memory budget~\cite{voltawp} bound the design space of
+Section~\ref{sec:method}.
+
+\textbf{The multi-block barrier problem.}
+Equation~\eqref{eq:dp}'s row dependency forces any naive multi-block DP to
+synchronize across all SMs after every row (\textbf{$H$ global barriers per
+seam}); we confirm this regresses $14\,\%$ behind \emph{Fused} on the V100
+(\emph{GridSync}, Section~\ref{sec:results}).
+Section~\ref{sec:method}'s \emph{Tiled} kernel resolves this with a halo
+argument that reduces global syncs from $H$ to $H/T$, enabling $K{\approx}60$
+active SMs without per-row coordination.

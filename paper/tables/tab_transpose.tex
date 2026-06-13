@@ -1,0 +1,23 @@
+% Appendix Table — VRAM transpose cost and horizontal-carve breakdown.
+% Protocol: V100, best-of-3, CUDA events. Source: bench/sbatch_transpose.sh.
+% Transpose verified bit-exact (round-trip) and h-mode pixel-identical to an
+% independent PIL-transpose -> vertical-carve -> PIL-transpose path.
+\begin{table}[h!]
+\caption{VRAM transpose cost and horizontal seam-carving breakdown (V100,
+best-of-3). The transpose is a fixed two-pass overhead amortized over all $N$
+removals. ``Carve'' is per-seam DP time in the transposed orientation, where the
+serial chain length equals the original \emph{width}.}
+\label{tab:transpose}
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Resolution} & \textbf{Transp.\ in} & \textbf{Transp.\ out} &
+\textbf{Carve} & \textbf{Overhead} \\
+ & (ms) & (ms) & (ms/seam) & (\%, $N$) \\
+\midrule
+ctrl 960$\times$540   & 0.08 & 0.02 & 0.424 & 0.25\,(96)  \\
+4K 3840$\times$2160   & 0.52 & 0.36 & 3.22  & 0.14\,(200) \\
+8K 7680$\times$4320   & 1.81 & 1.63 & 7.97  & 0.22\,(200) \\
+\bottomrule
+\end{tabular}
+\end{table}

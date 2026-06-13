@@ -1,0 +1,35 @@
+% Table II — Full end-to-end ms/seam across all methods and resolutions
+% Protocol: wall-clock, best-of-3, 50 seams
+% † Templated fails at ≥6K (register overflow)
+% ‡ CPU best: best ms/seam over 1–32 threads, NUMA-aware OpenMP (v4), see Appendix D
+% Fused ctrl not benchmarked (single-block fits 540-row images but was not collected)
+% GridStride: only benchmarked at 2K, 6K, 8K
+\begin{table*}[t]
+\caption{End-to-end ms/seam across all methods and resolutions (best-of-3, 50 seams).
+\textbf{Bold} = best GPU result per resolution.
+$\dagger$\emph{Templated} fails at ${\ge}6$K (register file overflow at CPT\,=\,8).
+--- indicates not benchmarked or unsupported at that resolution.
+$\ddagger$ \emph{CPU best} is the best ms/seam over 1--32 threads of our
+NUMA-aware OpenMP baseline (persistent team, parallel first-touch, cache
+ping-pong); the optimum lies at 8--32 threads (Appendix~\ref{app:omp}).}
+\label{tab:fullresults}
+\centering
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Method} & \textbf{ctrl} & \textbf{1080p} & \textbf{2K} & \textbf{4K} & \textbf{6K} & \textbf{8K} \\
+ & {\scriptsize 960$\times$540} & {\scriptsize 1920$\times$1080} & {\scriptsize 2560$\times$1440} & {\scriptsize 3840$\times$2160} & {\scriptsize 6144$\times$3456} & {\scriptsize 7680$\times$4320} \\
+\midrule
+CPU 1 core                   & 5.00  & 21.6  & 37.5  & 83.6  & 212   & 325   \\
+CPU best$^\ddagger$          & 1.14  & 3.59  & 5.63  & 9.88  & 25.6  & 35.4  \\
+\midrule
+\emph{Naive}                 & 1.37  & 3.10  & 3.77  & 5.92  & 10.3  & 13.9  \\
+\emph{Fused}                 & ---   & 1.94  & 3.08  & 6.73  & 12.63 & 21.3  \\
+\emph{Templated}$\dagger$    & 0.355 & 1.08  & 1.57  & 3.10  & ---   & ---   \\
+\emph{GridStride}            & ---   & ---   & 2.87  & ---   & 10.8  & 17.7  \\
+\textbf{\emph{Tiled}} (ours) & \textbf{0.314} & \textbf{0.917} & \textbf{1.25} & \textbf{2.16} & \textbf{4.16} & \textbf{5.73} \\
+\midrule
+\emph{Speedup vs 1 core}     & 16$\times$ & 24$\times$ & 30$\times$ & 39$\times$ & 51$\times$ & \textbf{57$\times$} \\
+\emph{Speedup vs CPU best}   & 3.6$\times$ & 3.9$\times$ & 4.5$\times$ & 4.6$\times$ & 6.2$\times$ & \textbf{6.2$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table*}

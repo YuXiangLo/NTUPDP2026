@@ -1,0 +1,20 @@
+%------------------------------------------------------------------------------
+\section{Conclusion}
+We set out to find how fast exact seam carving can run on a V100, and the more
+useful answer is \emph{where the wall is}. A profiling-driven path
+(\emph{Fused}$\rightarrow$\emph{Prefetch}$\rightarrow$\emph{BytePtr}$\rightarrow$\emph{Tiled})
+turns Nsight-diagnosed global-load latency into $1.7$--$2.1\times$ from latency
+hiding, and \textbf{\emph{Tiled}}---a trapezoidal halo-tiled multi-SM DP---is the
+best exact design at every resolution, reaching \textbf{5.73\,ms/seam} at 8K.
+Yet that is only \textbf{6.2$\times$} over a tuned 32-thread CPU
+($57\times$ over a single core). We show this ceiling is structural, not a lack
+of effort: the DP critical path is irreducible, a transpose cannot reduce it,
+and \emph{removing} the DP (greedy non-cumulative selection) gives no speedup
+because the per-seam pipeline---not the DP---is the bottleneck. The one large
+lever is amortization: approximate batch removal reaches $56\times$ over the
+exact pipeline. The negative results (fusion's 4K break-even, \emph{GridSync}'s
+barrier regression, the greedy wash) are as informative as the positive ones,
+and a bit-exact shared-memory transpose adds horizontal seams for free
+(Appendix~\ref{app:transpose}). Net: exact seam carving resists GPU acceleration
+for structural reasons; meaningful speedup requires changing the problem, not
+parallelizing harder.

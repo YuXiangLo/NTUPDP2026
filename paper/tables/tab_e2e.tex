@@ -1,0 +1,26 @@
+% Table II — End-to-end ms/seam: key resolutions only (full data in Table III)
+% Protocol: wall-clock, best-of-3, 50 seams
+% Note: CPU baseline is single-threaded; 4-thread saturates on this algorithm
+% due to row-by-row DP serialization (see Section 3.1). Speedup ratios use 1T CPU.
+% † Templated fails at ≥6K (register overflow); --- indicates unsupported.
+\begin{table}[t]
+\caption{End-to-end ms/seam (best-of-3, 50 seams) at three representative
+resolutions. \textbf{Bold} = best GPU result.
+$\dagger$\emph{Templated} fails at ${\ge}6$K. Full data in Table~\ref{tab:fullresults}.}
+\label{tab:e2e}
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Method} & \textbf{ctrl} & \textbf{4K} & \textbf{8K} \\
+ & {\scriptsize 960$\times$540} & {\scriptsize 3840$\times$2160} & {\scriptsize 7680$\times$4320} \\
+\midrule
+CPU 1-thread              & 5.00  & 83.6  & 325   \\
+\emph{Naive}              & 1.37  & 5.92  & 13.9  \\
+\emph{Templated}$\dagger$ & 0.355 & 3.10  & ---   \\
+\emph{GridStride}         & ---   & ---   & 17.7  \\
+\textbf{\emph{Tiled}} (ours) & \textbf{0.314} & \textbf{2.16} & \textbf{5.73} \\
+\midrule
+\emph{Speedup vs CPU}     & 16$\times$ & 39$\times$ & \textbf{57$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}

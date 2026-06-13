@@ -1,0 +1,172 @@
+%------------------------------------------------------------------------------
+\section{Methodology}
+\label{sec:method}
+
+\textbf{Pipeline overview.}
+The pipeline has four custom kernels: grayscale, energy, cost DP, and seam
+removal (Fig.~\ref{fig:pipeline}).
+Grayscale conversion uses BT.601 luma coefficients,
+$Y = 0.299R + 0.587G + 0.114B$.
+The energy map uses the $L_1$ gradient magnitude
+\begin{equation}
+e_{i,j} = \bigl|\partial I/\partial x\bigr| + \bigl|\partial I/\partial y\bigr|,
+\end{equation}
+computed with forward differences and border clamping.
+The seam is extracted by back-tracking the \texttt{bp} array from
+$j^{*} = \arg\min_{j}\,M_{H-1,j}$.
+Profiling on a 1428$\times$968 image confirms the DP consumes $\bm{\sim}$\textbf{93\%}
+of per-seam time; all optimization therefore targets that kernel.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\footnotesize,node distance=3mm and 4mm]
+  \tikzstyle{k}=[draw,rounded corners,minimum height=6mm,inner sep=2pt,align=center]
+  \node[k] (g)  {grayscale};
+  \node[k,right=of g] (e) {energy};
+  \node[k,right=of e,fill=blue!12,very thick] (d) {DP cost\\\textbf{$\sim$93\%}};
+  \node[k,right=of d] (r) {remove\\seam};
+  \draw[-{Latex}] (g)--(e); \draw[-{Latex}] (e)--(d); \draw[-{Latex}] (d)--(r);
+  \draw[-{Latex}] (r.south) .. controls +(0,-6mm) and +(0,-6mm) .. (g.south)
+    node[midway,below,font=\scriptsize] {repeat $k$ times (one seam each)};
+  \begin{scope}[shift={(0,-2.2)}]
+    \foreach \x in {0,1,2} \node[draw,minimum size=4.2mm] (a\x) at (\x*0.5,0.5) {};
+    \node[draw,minimum size=4.2mm,fill=blue!12] (b1) at (0.5,0) {};
+    \draw[-{Latex}] (a0.south) -- (b1.north west);
+    \draw[-{Latex}] (a1.south) -- (b1.north);
+    \draw[-{Latex}] (a2.south) -- (b1.north east);
+    \node[right=5mm of a2,align=left] {row $i\!-\!1$ (in shared mem)\\$M_{i,j}\!=\!e_{i,j}\!+\!\min(\cdot,\cdot,\cdot)$\\row $i$ depends on 3 cells above};
+  \end{scope}
+\end{tikzpicture}
+\caption{The four-kernel pipeline (top) and the DP's 3-way row dependency
+(bottom). The $H$ rows are serial; the $W$ columns within each row are parallel.}
+\label{fig:pipeline}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_kerneldesign.jpeg}
+\caption{Kernel paradigm comparison.
+\textbf{Naive} launches $H$ kernels (one per row) with a global-memory
+round-trip each time.
+\textbf{Fused} collapses all rows into one kernel: rows exchange via a
+shared-memory ping-pong with \texttt{\_\_syncthreads} between them.
+\textbf{Tiled} runs $K$ blocks in parallel (one strip per SM); each tile of
+$T$ rows stays entirely in shared memory and only exchanges one cost row
+per strip through global memory at the tile boundary, reducing kernel
+launches from $H$ to $\lceil H/T\rceil$.}
+\label{fig:kerneldesign}
+\end{figure}
+
+\textbf{Naive} --- one kernel launch per row: $H{-}1$ launches per seam,
+with a \textbf{full global-memory round-trip} per row
+(Fig.~\ref{fig:kerneldesign}, left).
+Each row reads $W$ energy and $W$ cost values from DRAM and writes $W$
+cost values plus $W$ back-pointers back; total per-seam traffic is
+$\bm{4HW}$ \textbf{memory transactions}, all of which hit DRAM because
+the cost array (one seam at 4K: ${\sim}$32\,MB) far exceeds the L2 cache.
+
+\textbf{Fused} --- one thread block walks all $H$ rows top-to-bottom, keeping
+previous and current cost rows in two \textbf{ping-pong shared-memory buffers}
+of $W$ \texttt{int16} values each (Fig.~\ref{fig:kerneldesign}, centre).
+One \texttt{\_\_syncthreads()} separates rows, ensuring the prior row's
+costs are visible before the next row begins.
+Shared-memory footprint: $2W \times 2\,\text{B}$; at 4K ($W{=}3840$)
+this is $15.4$\,KB, well within the 96\,KB opt-in limit.
+One launch replaces $H$, eliminating $(H{-}1)$ kernel overheads.
+
+\textbf{GridSync} --- replacing the block barrier with a grid-wide
+\texttt{grid.sync()} after each row lets multiple SMs collaborate, but each of
+the $H$ device-wide barriers costs ${\sim}10\,\mu\text{s}$ against only
+${\sim}1\,\mu\text{s}$ of per-row arithmetic at $W{=}1428$: \textbf{barrier-bound
+at $\bm{\sim}$6\% occupancy}, so we abandon it. This negative result motivates
+\emph{Tiled}'s barrier-free design.
+
+\textbf{Prefetch} --- Nsight Compute identifies \emph{Fused}'s dominant stall as
+\texttt{long\_scoreboard}: every warp waits ${\sim}$200 cycles for the global
+load of the current energy row $e_{i,\cdot}$.
+The fix is software pipelining: while computing $M_{i,\cdot}$ (which only
+reads shared-memory cost data), each thread \textbf{issues the global load
+for $e_{i+1,\cdot}$} into a register array \texttt{e\_next[]}.
+By the time \texttt{\_\_syncthreads()} completes and row $i{+}1$ begins,
+the load has resolved---arithmetic and memory transfer overlap:
+\begin{equation}
+\underbrace{\text{compute}\;M_{i,\cdot}}_{\text{shmem reads}} \;\big\|\;
+\underbrace{\text{load}\;e_{i+1,\cdot}}_{\text{global read}}.
+\end{equation}
+
+\textbf{BytePtr} --- the back-pointer at each cell is one of $\{-1,0,+1\}$,
+yet \emph{Fused} stores it as a 4-byte \texttt{int}.
+Switching to \texttt{signed char} (1\,byte) \textbf{cuts back-store traffic by
+$\bm{4\times}$}: at 4K ($W{=}3840$, $H{=}2160$), the back-pointer array
+shrinks from 32\,MB to 8\,MB per seam pass.
+Output is bit-identical; the seam extraction reads the same values.
+
+\textbf{Templated} --- the $W\le 2048$ cap in \emph{Prefetch}/\emph{BytePtr}
+arises because the register array \texttt{e\_next[]} must have a fixed
+compile-time size.
+Making columns-per-thread (\texttt{CPT} $= \lceil W/\text{blockDim}\rceil$) a
+\textbf{compile-time template parameter} lets the host select the right
+instantiation at launch; all prefetch arrays remain register-resident.
+At 4K: $\text{CPT}=4$, registers per thread ${\approx}24$.
+At ${\ge}6$K: $\text{CPT}=8$, register count exceeds the per-block budget
+and the compiler spills to local memory---\textbf{Templated fails at $\ge$6K}.
+
+\textbf{GridStride} --- \emph{Templated}'s register overflow at 8K is caused by
+the fixed-size prefetch arrays.
+\emph{GridStride} replaces the CPT register array with a \textbf{scalar
+prefetch variable}: each thread strides over columns $t,\;t{+}B,\;t{+}2B,\ldots$
+(where $B{=}\text{blockDim.x}$), issuing one scalar prefetch load per stride.
+Register count stays constant at any $W$, enabling \textbf{arbitrary-width support},
+at the cost of losing the multi-element register-resident overlap that
+\emph{Templated} achieves---hence \emph{GridStride} shows a
+20--40\% latency deficit vs.\ \emph{Templated} on images where both run.
+
+\textbf{Tiled} --- \emph{Templated} and \emph{GridStride} both use a
+\emph{single block}, leaving 79 of 80 SMs idle.
+\emph{Tiled} breaks this with a \textbf{halo argument}
+(Figs.~\ref{fig:kerneldesign} right, \ref{fig:tiledhalo}): the $W$ columns
+are divided into $K$ strips of center width $S = \lceil W/K \rceil$.
+Strip $k$ covers columns $[kS - T,\;(k{+}1)S + T)$---i.e., $T$ halo columns on
+each side---so $K$ blocks run concurrently, one per SM.
+
+The correctness argument is a seam-drift bound: within a tile of $T$ rows, the
+seam shifts by at most one column per row, so after $T$ rows it has drifted by
+at most $T$ columns.
+Any seam error is therefore contained within the $T$-column halo, and the
+center $S$ columns are \textbf{bit-exact}.
+Only the center strip of the cost row is written to the global ping-pong
+buffer at each tile boundary; the halo is recomputed by the neighboring block
+from its own center result.
+
+Shared memory per block stores two ping-pong cost rows and one back-pointer row,
+each of width $S{+}2T$:
+\begin{equation}
+\text{shmem} = 2(S{+}2T)\cdot 2\,\text{B}
+             + (S{+}2T)\cdot 1\,\text{B}
+             = 5(S{+}2T)\,\text{B}.
+\label{eq:shmem}
+\end{equation}
+At $K{=}60$, $T{=}64$, $W{=}3840$: $S{=}64$ and
+$\text{shmem} = 5{\times}192 = 960\,\text{B}$ per block---far below the
+96\,KB limit.
+\textbf{Kernel launches drop from $H$ to $\lceil H/T\rceil$}
+(68 at 8K with $T{=}64$) while all $K{\approx}60$ SMs stay active.
+Output is bit-exact against \emph{Templated}.
+A 3$\times$3 parameter sweep ($K{\in}\{40,60,80\}$, $T{\in}\{32,64,128\}$)
+shows all nine combinations land within ${\sim}5\%$ of the optimum
+(Appendix~\ref{app:sweep}):
+\textbf{the design is robust to parameter choice}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_tiledhalo.png}
+\caption{\textbf{Tiled} strip and halo layout.
+\textit{Top}: The $W$ columns are divided into $K$ strips; each strip is
+extended by $T$ halo columns on each side (orange). Adjacent strips share
+halo columns without a barrier.
+\textit{Bottom}: Within a tile of $T$ rows, one block computes entirely in
+shared memory. The seam drifts at most one column per row, so after $T$ rows
+the error stays inside the orange halo; the blue center is bit-exact.
+Only the center strip is written to \texttt{d\_next} at the tile boundary.}
+\label{fig:tiledhalo}
+\end{figure}

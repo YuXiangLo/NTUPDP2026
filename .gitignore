@@ -218,3 +218,56 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.claude
+
+# CUDA standalone build artifacts
+cuda/seam_carve
+cuda/seam_carve_v0
+cuda/seam_carve_v2
+cuda/seam_carve_v3
+cuda/seam_carve_v4
+cuda/seam_carve_v5
+cuda/seam_carve_v6
+cuda/seam_carve_cpu
+cuda/seam_carve_cpu_omp
+cuda/seam_vis
+cuda/seam_carve_naive
+cuda/seam_carve_wide
+cuda/seam_carve_fused
+cuda/seam_carve_tiled
+cuda/seam_carve_tiled_pf
+cuda/seam_carve_tiled_hv
+cuda/seam_carve_batch
+cuda/seam_carve_persistent
+cuda/seam_carve_greedy
+cuda/seam_carve_cpu_incr
+cuda/strip_microbench
+cuda/tiled_K*
+cuda/tiled_pf_*
+cuda/*.o
+cuda/*.ncu-rep
+cuda/results.csv
+carved.png
+
+# Conda / Miniconda
+Miniconda3*.sh
+*.conda_lock
+
+# Benchmark results and figures (generated, not source)
+results/
+figures/
+slurm-*.out
+slurm-*.err
+
+# OpenMP standalone build artifacts
+openmp/seam_carve_seq
+openmp/seam_carve_omp_v1
+openmp/seam_carve_omp_v2
+openmp/seam_carve_omp_v3
+openmp/seam_carve_omp_v4
+openmp/*.o
+openmp/out_*.png
+
+# Cloned competitor repos for related-work comparison (not part of deliverable)
+related-work/

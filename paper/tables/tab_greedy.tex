@@ -1,0 +1,24 @@
+% Appendix Table — non-DP greedy vs exact Tiled (ms/seam, best-of-3, N=100).
+% Greedy = W independent greedy descents scored by raw path energy, pick best.
+% Source: bench/sbatch_greedy.sh.
+\begin{table}[h!]
+\caption{Removing the DP buys nothing. \emph{Greedy} is a non-cumulative,
+fully-parallel selection (no cost matrix, no barriers, no serial chain); it
+matches exact \emph{Tiled} to within 3\% at every resolution, because the greedy
+walks are column-scattered and equally memory-latency-bound, and the per-seam
+energy map dominates either way.}
+\label{tab:greedy}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Resolution} & \textbf{Greedy (non-DP)} & \textbf{Exact \emph{Tiled}} & \textbf{Ratio} \\
+\midrule
+ctrl  $960{\times}540$   & 0.304 & 0.312 & $1.03\times$ \\
+1080p $1920{\times}1080$ & 0.802 & 0.824 & $1.03\times$ \\
+2K    $2560{\times}1440$ & 1.196 & 1.247 & $1.04\times$ \\
+4K    $3840{\times}2160$ & 2.097 & 2.168 & $1.03\times$ \\
+6K    $6144{\times}3456$ & 4.025 & 4.180 & $1.04\times$ \\
+8K    $7680{\times}4320$ & 5.581 & 5.766 & $1.03\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}

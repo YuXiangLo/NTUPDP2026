@@ -1,0 +1,23 @@
+% Table I — DP kernel duration per configuration
+% Protocol: Nsight Compute, first seam, 1428×968 (Broadway)
+% Note: Prefetch and BytePtr speedups (1.67× and 1.85×) are consistent 
+% across resolutions (1920×1080: 1.96× and 2.08×; 960×540: 1.95× and 1.97×).
+\begin{table}[t]
+\caption{DP kernel per configuration (1428$\times$968, Nsight, first seam).
+\emph{Naive} uses $H$ per-row launches; no single fused kernel to profile.
+Prefetch/BytePtr improvements verified consistent across standard resolutions.}
+\label{tab:versions}
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Method} & \textbf{Duration (ms)} & \textbf{vs \emph{Fused}} \\
+\midrule
+\emph{Naive}     & ---            & ---                        \\
+\emph{Fused}     & 1.46           & 1.00$\times$ (baseline)    \\
+\emph{GridSync}  & \textbf{1.66}  & \textbf{0.88$\times$} (regressed) \\
+\emph{Prefetch}  & \textbf{0.872} & \textbf{1.67$\times$}      \\
+\emph{BytePtr}   & 0.790          & 1.85$\times$               \\
+\emph{Templated} & 0.790          & 1.85$\times$               \\
+\bottomrule
+\end{tabular}
+\end{table}

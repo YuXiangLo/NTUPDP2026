@@ -1,0 +1,25 @@
+% Appendix Table — depth-invariance controlled experiment.
+% Same image, two orientations: identical H*W work, only serial depth D differs.
+% Source: bench/sbatch_depth_invariance.sh (V100, best-of-3).
+\begin{table}[h!]
+\caption{Transpose changes orientation, not cost. The same image is carved in
+both orientations: total work $H{\cdot}W$ is identical; only the DP serial depth
+$D$ differs. The larger-$D$ orientation is \emph{always} slower---for both
+single-seam and batch---confirming that performance tracks serial depth, which
+transpose cannot reduce for a fixed seam direction.}
+\label{tab:depth}
+\centering
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Image} & \textbf{Orient.} & \textbf{Depth $D$} &
+\textbf{Single} & \textbf{Batch} \\
+ & & (rows) & (ms/seam) & (ms/seam) \\
+\midrule
+4K & original   & 2160 & \textbf{2.156} & \textbf{0.048} \\
+4K & transposed & 3840 & 3.235 & 0.069 \\
+\midrule
+8K & original   & 4320 & \textbf{5.747} & \textbf{0.122} \\
+8K & transposed & 7680 & 7.999 & 0.147 \\
+\bottomrule
+\end{tabular}
+\end{table}

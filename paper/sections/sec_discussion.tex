@@ -1,0 +1,114 @@
+%------------------------------------------------------------------------------
+\section{Discussion and Analysis}
+\label{sec:disc}
+\textbf{Why fusion is not free.} The most informative result is the 4K row of
+Table~\ref{tab:fullresults}: \emph{Fused} (6.73\,ms) is barely faster than \emph{Naive}
+(5.92\,ms) at 3840$\times$2160---a \textbf{$\sim$1.1$\times$} gain---whereas on small images
+fusion gives \textbf{$1.6$--$1.7\times$}. Folding the whole DP into one block means one SM
+chewing a 3840-wide row; its throughput cannot beat \emph{Naive}, whose per-row
+launch spreads $W$ columns across all 80\,SMs. Fusion's benefit---eliminating $H$
+launches---is large only when launch cost is a sizable fraction of per-row work,
+which holds for narrow images but not for wide ones.
+\textbf{Lesson: \emph{profile before assuming fusion wins}.}
+
+\textbf{Latency hiding, not parallelism.} What improves the fused path at 4K is
+latency hiding rather than added parallelism. \emph{Prefetch} overlaps the energy
+load with arithmetic; \emph{BytePtr} quarters the back-store volume. Together
+they take \emph{Templated} to $2.2\times$ over \emph{Naive} and $2.1\times$ over
+\emph{Fused} at 4K, turning fusion's 4K break-even into a net gain.
+Nsight Compute confirms: once \emph{BytePtr} is in place, \texttt{long\_scoreboard}
+falls out of the top stall reasons entirely; the residual stalls are a balanced
+mix of \texttt{not\_selected}, \texttt{wait}, and \texttt{barrier}---we have
+reached the floor set by the serial row dependency.
+By contrast, \emph{GridStride} (which cannot template-specialize its prefetch
+arrays) shows \texttt{long\_scoreboard}$\approx$7 cycles as its top stall,
+explaining its 20--40\,\% deficit vs.\ \emph{Templated} on images where both fit.
+
+\textbf{Halo redundancy cost.}
+\emph{Tiled} recomputes each strip's halo, so it performs more column work per
+row than a single pass---a real arithmetic overhead, up to $3\times$ at 4K.
+This is a deliberate trade-off: the alternative for exact multi-SM DP is a
+device-wide barrier after every row, which we measured to be slower
+(\emph{GridSync}). We quantify both sides below.
+\emph{Tiled} computes $K{\times}(S{+}2T)$ columns per row instead of $W$,
+where $S{=}W/K$ is the center-strip width. The \emph{redundancy factor} is
+$\rho = 1 + 2TK/W$. At 4K ($W{=}3840$, $K{=}60$, $T{=}64$):
+$\rho = 1 + 2{\times}64{\times}60/3840 = \mathbf{3.0{\times}}$.
+At 8K ($W{=}7680$): $\rho = \mathbf{2.0{\times}}$.
+Despite this overhead, the $K{=}60$ SM parallelism---unavailable to any
+single-block design---dominates: an ideal linear model predicts
+$60/\rho = \mathbf{20{\times}}$ throughput gain at 4K and $\mathbf{30{\times}}$ at 8K.
+Measured gains over \emph{Fused} are \textbf{$3.1\times$} (4K) and \textbf{$3.7\times$} (8K),
+reflecting that the V100's memory-bandwidth ceiling, not arithmetic capacity,
+is the true limit. Halo overhead decreases as $W$ grows---\emph{Tiled}'s
+efficiency therefore improves with resolution, matching the monotonically
+widening speedup curve (Fig.~\ref{fig:scaling}).
+
+\textbf{Limitations and multi-SM design.} (1) Single-block uses one SM, leaving
+79/80 of the GPU idle during DP. \emph{Tiled} directly addresses this via the
+halo argument: with $K{=}60$ strips and $T{=}64$ rows/tile, it achieves
+\textbf{5.73\,ms/seam} at 8K (\textbf{$3.1\times$} over \emph{GridStride}). The
+$3\times3$ parameter sweep confirms robustness: all combinations land within
+${\sim}5\%$ of the optimum (Appendix~\ref{app:sweep}).
+(2) \emph{Templated} fails at ${\ge}6$K: \texttt{CPT}=8 raises the per-thread
+register count to ${\approx}$32, exhausting the V100's register file
+at the required block size. We sidestep this with \emph{GridStride} (constant
+registers via scalar prefetch) and \emph{Tiled} (${\approx}$16 registers/thread,
+Table~\ref{tab:hw}), both register-safe at any width; rescuing \emph{Templated}
+itself via explicit PTX-level register allocation is future work, as \emph{Tiled}
+already supersedes it.
+(3) The exact one-at-a-time formulation has been largely superseded in
+production pipelines, which remove batches of seams in one forward pass at
+the cost of pixel-exact reproducibility~\cite{kim2015}.
+(4) Our NUMA-aware OpenMP baseline scales to 8--32 cores (Appendix~\ref{app:omp});
+the optimum is limited by the per-row implicit barrier (small images) and
+memory-bandwidth saturation (large images), not by thread-team management---the
+team is persistent and pages are first-touched locally. \emph{Tiled} is
+$3.6$--$6.2\times$ faster than this best multicore CPU configuration.
+(5) Horizontal seams reuse the same kernels on a transposed image. We implement
+a coalesced shared-memory transpose (Appendix~\ref{app:transpose}): it is
+bit-exact, costs ${\approx}1.7$\,ms/pass at 8K, and adds only 0.14--0.25\%
+when amortized over a multi-seam resize (though ${\approx}30\%$ for a single 8K
+seam). The transpose only enables the orthogonal direction; it cannot
+accelerate the DP itself, which we prove (critical-path invariance) and confirm
+empirically in Appendix~\ref{app:depth}. The main results target vertical seams
+to match prior GPU work.
+
+\textbf{The DP is not the end-to-end bottleneck.}
+At 8K the 5.73\,ms/seam splits into \textbf{${\approx}4.3$\,ms DP} (75\%) and
+\textbf{${\approx}1.4$\,ms pre-processing} (25\%). Strikingly, \emph{removing}
+the DP does not help---a greedy non-cumulative selection matches \emph{Tiled}
+within 3\% (Appendix~\ref{app:greedy})---because every per-seam method pays the
+same $\Omega(HW)$ memory-traffic floor (${\approx}1.4$\,ms) and the connected
+seam search is $\Theta(HW)$-work either way; reducing the DP's depth below $H$
+provably costs more work, not less (Appendix~\ref{app:greedy}). The only way
+below the floor is to change the problem: \emph{read less} (incremental
+update~\cite{lee2009}---bit-exact and $1.5\times$ on CPU, but no V100 win since
+the tiled DP is latency-bound, Appendix~\ref{app:greedy}) or \emph{write less}
+(batch, below)---the latter is our one large win.
+
+\textbf{Extension to approximate multi-seam removal.}
+The $K$-strip structure also supports batch removal: one DP pass yields $K{=}60$
+strip-local seams that a single $K$-independent \emph{batch-remove} kernel
+deletes in one pass, amortizing DP and preprocessing over 60 seams. We measured
+(Appendix~\ref{app:batch}) \textbf{46$\times$} (ctrl) to \textbf{56$\times$} (8K)
+over the exact single-seam pipeline---0.103\,ms/seam at 8K. This is the
+practically important regime: the \emph{exact} pipeline leads the best multicore
+CPU by only $6.2\times$ (serial-chain bound), whereas the approximate batch path
+removes a seam every ${\approx}0.1$\,ms, two orders of magnitude below any
+\emph{exact} CPU. The trade-off is strip-local, not global,
+optimality~\cite{kim2015}; this mode is reported separately from the exact
+contribution.
+
+\textbf{No stronger exact CPU schedule.}
+Diagonal-wavefront parallelization---which processes anti-diagonals $d{=}i{+}j$
+for edit-distance-style DP---adds no parallelism here: cell $(i,j)$ depends on
+$M_{i-1,j+1}$, whose anti-diagonal index is also $i{+}j{=}d$, so the dependency
+lies within the same anti-diagonal. Row-parallel OpenMP ($W$-way per row, $H$
+barriers) is therefore the natural exact CPU parallelization, and our baseline
+is the best-tuned instance of it.
+
+\textbf{Threats to validity.} Numbers are best-of-3 on a shared SLURM cluster;
+we mitigate jitter by reporting ms/seam over 50 seams. The \emph{Naive} baseline
+is a lean one-launch-per-row kernel; a less careful implementation would only
+widen the gap, making our speedups over \emph{Naive} conservative.
